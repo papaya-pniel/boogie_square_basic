@@ -11,10 +11,11 @@
     "dependencies": {
         "@aws-amplify/backend": "^1.16.1",
         "@aws-amplify/backend-cli": "^1.7.2",
-        "@vitejs/plugin-react": "^4.5.0",
         "@react-three/drei": "^9.122.0",
         "@react-three/fiber": "^8.18.0",
         "@tsparticles/preset-sea-anemone": "^3.2.0",
+        "@vitejs/plugin-react": "^4.5.0",
+        "aws-amplify": "^6.15.0",
         "gsap": "^3.13.0",
         "lil-gui": "^0.20.0",
         "lucide-react": "^0.509.0",
