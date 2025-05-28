@@ -1,12 +1,10 @@
 import { defineBackend } from '@aws-amplify/backend';
-import { auth } from './auth/resource'; // Notice the new path
-import { customDomainStack } from './custom-domain/resource';
-import { addCustomDomain } from './custom-domain/resource';
+import { auth } from './auth/resource';
+import { addCustomDomain } from './custom-domain/resource'; // Updated name
 
 export const backend = defineBackend({
   auth,
-  cdk: customDomainStack, // Register the CDK stack
 });
 
-const customStack = backend.createStack('CustomResources');
-addCustomDomain(customStack);
+const customStack = backend.createStack('CustomDomainStack');
+addCustomDomain(customStack); // Call the function with the stack
