@@ -2,8 +2,23 @@ import React, { useState, useRef } from "react";
 import { Card, CardContent } from "./components/ui/card";
 import { Button } from "./components/ui/button";
 import { UploadCloud, Plus } from "lucide-react";
+import { Amplify } from 'aws-amplify';
+import { Authenticator } from '@aws-amplify/ui-react';
+import '@aws-amplify/ui-react/styles.css';
+import outputs from '../amplify_outputs.json';
+
+// Configure Amplify with backend outputs
+Amplify.configure(outputs);
 
 export default function App() {
+  return (
+    <Authenticator>
+      {({ signOut, user }) => <BoogieApp signOut={signOut} user={user} />}
+    </Authenticator>
+  );
+}
+
+function BoogieApp({ signOut, user }) {
   const inputRef = useRef(null);
   const [videos, setVideos] = useState(Array(16).fill(null));
   const [activeIndex, setActiveIndex] = useState(null);
@@ -28,7 +43,9 @@ export default function App() {
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-6xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-center">Boogie Square</h1>
+        <h1 className="text-3xl font-bold mb-6 text-center">
+          Boogie Square - Welcome {user?.signInDetails?.loginId || user?.username}
+        </h1>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           {videos.map((src, idx) => (
@@ -58,6 +75,10 @@ export default function App() {
           onChange={handleFileInput}
           className="hidden"
         />
+
+        <div className="mt-6 text-center">
+          <Button onClick={signOut}>Sign Out</Button>
+        </div>
       </div>
     </div>
   );
