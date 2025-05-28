@@ -15,10 +15,7 @@ export default function App() {
   return (
     <Authenticator>
       {({ signOut, user }) => (
-        <div>
-          <h1>Welcome {user?.username}</h1>
-          <button onClick={signOut}>Sign out</button>
-        </div>
+        <BoogieApp signOut={signOut} user={user} />
       )}
     </Authenticator>
   );
