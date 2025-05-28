@@ -1,0 +1,17 @@
+:root {
+    --amplify-colors-background-primary: #000000; /* Page background black */
+    --amplify-colors-font-primary: #000000; /* Black text inside form */
+    --amplify-colors-font-secondary: #333333; /* Slightly lighter text (optional) */
+  
+    /* Let the box remain white (default) */
+    /* Do not override --amplify-colors-background-secondary or neutral colors */
+  }
+  
+  .amplify-authenticator {
+    background-color: black; /* Page background */
+  }
+  
+  .amplify-container {
+    background-color: white; /* Form box white */
+  }
+  

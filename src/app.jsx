@@ -3,6 +3,7 @@ import { Card, CardContent } from "./components/ui/card";
 import { Button } from "./components/ui/button";
 import { UploadCloud, Plus } from "lucide-react";
 import { Amplify } from 'aws-amplify';
+import './App.css';
 import { Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import outputs from '../amplify_outputs.json';
@@ -13,7 +14,12 @@ Amplify.configure(outputs);
 export default function App() {
   return (
     <Authenticator>
-      {({ signOut, user }) => <BoogieApp signOut={signOut} user={user} />}
+      {({ signOut, user }) => (
+        <div>
+          <h1>Welcome {user?.username}</h1>
+          <button onClick={signOut}>Sign out</button>
+        </div>
+      )}
     </Authenticator>
   );
 }
