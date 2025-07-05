@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect } from "react";
-import { API, graphqlOperation, Storage } from "aws-amplify";
-import { createGrid, updateGrid, getGrid, listGrids } from '../graphql/queries';
+import { API, graphqlOperation } from "aws-amplify";
+import { GraphQLResult } from "@aws-amplify/api";
+import * as queries from '../graphql/queries';
+import * as mutations from '../graphql/mutations';
 
 export const VideoContext = createContext();
 
@@ -17,7 +19,7 @@ export function VideoProvider({ children }) {
   const initializeGrid = async () => {
     try {
       // Get the most recent active grid
-      const grids = await API.graphql(graphqlOperation(listGrids, {
+      const grids = await API.graphql(graphqlOperation(queries.listGrids, {
         filter: {
           isActive: { eq: true }
         },
@@ -44,7 +46,7 @@ export function VideoProvider({ children }) {
 
   const createNewGrid = async () => {
     try {
-      const response = await API.graphql(graphqlOperation(createGrid, {
+      const response = await API.graphql(graphqlOperation(mutations.createGrid, {
         input: {
           videos: Array(4).fill(null),
           isActive: true
@@ -90,7 +92,7 @@ export function VideoProvider({ children }) {
       const updatedVideos = [...videos];
       updatedVideos[index] = s3Key;
       
-      await API.graphql(graphqlOperation(updateGrid, {
+      await API.graphql(graphqlOperation(mutations.updateGrid, {
         input: {
           id: currentGridId,
           videos: updatedVideos
