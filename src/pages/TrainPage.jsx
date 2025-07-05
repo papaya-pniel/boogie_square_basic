@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState, useContext } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
+import { Storage } from "aws-amplify";
 
 export default function TrainPage() {
   const { index } = useParams();
-  const { updateVideoAtIndex } = useContext(VideoContext);
+  const { updateVideoAtIndex, getS3VideoUrl } = useContext(VideoContext);
   const navigate = useNavigate();
 
   const [countdown, setCountdown] = useState(3);
@@ -62,10 +63,23 @@ export default function TrainPage() {
       }
     };
 
-    mediaRecorder.onstop = () => {
+    mediaRecorder.onstop = async () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
-      setRecordedBlobUrl(url);
+      
+      // First upload to S3
+      const timestamp = new Date().toISOString();
+      const filename = `videos/${index}_${timestamp}.webm`;
+      await Storage.put(filename, blob, {
+        contentType: 'video/webm',
+        level: 'private'
+      });
+
+      // Then update the grid with the S3 key
+      await updateVideoAtIndex(parseInt(index), filename);
+
+      // Get the S3 URL for display
+      const s3Url = await getS3VideoUrl(filename);
+      setRecordedBlobUrl(s3Url);
 
       // stop webcam
       stream.getTracks().forEach((track) => track.stop());
@@ -80,6 +94,15 @@ export default function TrainPage() {
     mediaRecorderRef.current?.stop();
     setRecording(false);
   };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 animate-fadeIn">

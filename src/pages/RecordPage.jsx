@@ -2,6 +2,7 @@ import React, { useContext, useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
+import { Storage } from "aws-amplify";
 
 export default function RecordPage() {
   const { index } = useParams();
@@ -9,7 +10,7 @@ export default function RecordPage() {
   // If we're in center-focus pattern, map indices 5,6,9,10 → 5
   const slotToUpdate = [5, 6, 9, 10].includes(idxNum) ? 5 : idxNum;
 
-  const { updateVideoAtIndex } = useContext(VideoContext);
+  const { updateVideoAtIndex, getS3VideoUrl } = useContext(VideoContext);
   const navigate = useNavigate();
 
   const [recording, setRecording] = useState(false);
@@ -55,10 +56,25 @@ export default function RecordPage() {
       if (e.data.size > 0) chunksRef.current.push(e.data);
     };
 
-    recorder.onstop = () => {
+    recorder.onstop = async () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      const url = URL.createObjectURL(blob);
-      setRecordedBlobUrl(url);
+      
+      // First upload to S3
+      const timestamp = new Date().toISOString();
+      const filename = `videos/${slotToUpdate}_${timestamp}.webm`;
+      await Storage.put(filename, blob, {
+        contentType: 'video/webm',
+        level: 'private'
+      });
+
+      // Then update the grid with the S3 key
+      await updateVideoAtIndex(slotToUpdate, filename);
+
+      // Get the S3 URL for display
+      const s3Url = await getS3VideoUrl(filename);
+      setRecordedBlobUrl(s3Url);
+
+      // stop webcam
       stream.getTracks().forEach((t) => t.stop());
     };
 
@@ -96,8 +112,10 @@ export default function RecordPage() {
     setRecording(false);
   };
 
-  const handleReRecord = () => {
+  const handleReRecord = async () => {
     setRecordedBlobUrl(null);
+    // Clear the grid slot
+    await updateVideoAtIndex(slotToUpdate, null);
     setRecording(false);
   };
 

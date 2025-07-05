@@ -1,11 +1,12 @@
-// src/clinet/MainGrid.jsx
+// src/pages/MainGrid.jsx
 import React, { useContext, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
+import { Storage } from "aws-amplify";
 
 export default function MainGrid() {
   const navigate = useNavigate();
-  const { videos } = useContext(VideoContext);
+  const { videos, updateVideoAtIndex, isLoading, getS3VideoUrl } = useContext(VideoContext);
   const [selectedSong, setSelectedSong] = useState("none.mp3");
   const [gridSize, _setGridSize] = useState(4);
   const [pattern, _setPattern] = useState(() => localStorage.getItem("pattern") || "default");
@@ -23,7 +24,27 @@ export default function MainGrid() {
 
   const audioRef = useRef();
   const totalSlots = gridSize * gridSize;
-  const paddedVideos = [...videos];
+  const [videoUrls, setVideoUrls] = useState([]);
+
+  useEffect(() => {
+    async function fetchVideoUrls() {
+      const urls = await Promise.all(
+        videos.map(async (video) => {
+          if (!video) return null;
+          try {
+            return await getS3VideoUrl(video);
+          } catch (error) {
+            console.error('Error fetching video URL:', error);
+            return null;
+          }
+        })
+      );
+      setVideoUrls(urls);
+    }
+    fetchVideoUrls();
+  }, [videos, getS3VideoUrl]);
+
+  const paddedVideos = [...videoUrls];
   while (paddedVideos.length < totalSlots) paddedVideos.push(null);
 
   useEffect(() => {
@@ -75,10 +96,18 @@ export default function MainGrid() {
     navigate(`/train/${index}`);
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        <p>Loading grid state...</p>
+      </div>
+    );
+  }
+
   if (!gridReady) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black text-white">
-        <p>Loading grid...</p>
+        <p>Loading videos...</p>
       </div>
     );
   }
