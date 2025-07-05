@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { uploadData, downloadData, remove } from "aws-amplify/storage";
 import { GraphQLAPI, graphqlOperation } from "@aws-amplify/api-graphql";
-import { AuthContext } from "@aws-amplify/ui-react";
+import { useAuthenticator } from "@aws-amplify/ui-react";
 
 const Storage = {
   async put(filename, blob, options) {
@@ -18,7 +18,7 @@ import * as mutations from '../graphql/mutations';
 export const VideoContext = createContext();
 
 export function VideoProvider({ children }) {
-  const { user } = useContext(AuthContext);
+  const { user } = useAuthenticator();
   const [videos, setVideos] = useState(Array(4).fill(null));
   const [currentGridId, setCurrentGridId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
