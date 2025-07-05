@@ -18,7 +18,7 @@ export function VideoProvider({ children }) {
   const initializeGrid = async () => {
     try {
       // Get the most recent active grid
-      const grids = await API.graphql(graphqlOperation(queries.listGrids, {
+      const grids = await GraphQLAPI.graphql(graphqlOperation(queries.listGrids, {
         filter: {
           isActive: { eq: true }
         },
@@ -144,7 +144,7 @@ export function VideoProvider({ children }) {
   // Add a function to get all completed grids
   const getCompletedGrids = async () => {
     try {
-      const grids = await API.graphql(graphqlOperation(queries.listGrids, {
+      const grids = await GraphQLAPI.graphql(graphqlOperation(queries.listGrids, {
         filter: {
           status: { eq: 'COMPLETED' }
         },
@@ -163,7 +163,7 @@ export function VideoProvider({ children }) {
   // Add a function to get grid history for a user
   const getUserGridHistory = async (userId) => {
     try {
-      const grids = await API.graphql(graphqlOperation(queries.listGrids, {
+      const grids = await GraphQLAPI.graphql(graphqlOperation(queries.listGrids, {
         filter: {
           status: { eq: 'COMPLETED' },
           users: {
