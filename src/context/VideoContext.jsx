@@ -1,6 +1,8 @@
 import React, { createContext, useState, useEffect } from "react";
-import { Storage } from "aws-amplify";
+import { createStorageManager } from "@aws-amplify/storage";
 import { GraphQLAPI, graphqlOperation } from "@aws-amplify/api-graphql";
+
+const Storage = createStorageManager();
 import * as queries from '../graphql/queries';
 import * as mutations from '../graphql/mutations';
 

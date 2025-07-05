@@ -2,7 +2,9 @@
 import React, { useContext, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
-import { Storage } from "aws-amplify";
+import { createStorageManager } from "@aws-amplify/storage";
+
+const Storage = createStorageManager();
 
 export default function MainGrid() {
   const navigate = useNavigate();

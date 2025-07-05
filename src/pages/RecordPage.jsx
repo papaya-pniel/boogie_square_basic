@@ -2,7 +2,9 @@ import React, { useContext, useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
-import { Storage } from "aws-amplify";
+import { createStorageManager } from "@aws-amplify/storage";
+
+const Storage = createStorageManager();
 
 export default function RecordPage() {
   const { index } = useParams();
