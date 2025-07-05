@@ -53,72 +53,102 @@ export default function RecordPage() {
   }, []);
 
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    streamRef.current = stream;
-    videoRef.current.srcObject = stream;
+    try {
+      console.log('Starting recording...');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      console.log('Got media stream');
+      streamRef.current = stream;
+      videoRef.current.srcObject = stream;
 
-    const recorder = new MediaRecorder(stream);
-    mediaRecorderRef.current = recorder;
-    chunksRef.current = [];
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
 
-    recorder.ondataavailable = (e) => {
-      if (e.data.size > 0) chunksRef.current.push(e.data);
-    };
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
 
-    recorder.onstop = async () => {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      
-      // First upload to S3
-      const timestamp = new Date().toISOString();
-      const filename = `videos/${slotToUpdate}_${timestamp}.webm`;
-      await Storage.put(filename, blob, {
-        contentType: 'video/webm',
-        level: 'private'
-      });
+      recorder.onstop = async () => {
+        try {
+          console.log('Recorder stopped');
+          const blob = new Blob(chunksRef.current, { type: "video/webm" });
+          
+          // First upload to S3
+          const timestamp = new Date().toISOString();
+          const filename = `videos/${slotToUpdate}_${timestamp}.webm`;
+          console.log('Uploading to S3:', filename);
+          await Storage.put(filename, blob, {
+            contentType: 'video/webm',
+            level: 'private'
+          });
 
-      // Then update the grid with the S3 key
-      await updateVideoAtIndex(slotToUpdate, filename);
+          // Then update the grid with the S3 key
+          console.log('Updating grid with S3 key:', filename);
+          await updateVideoAtIndex(slotToUpdate, filename);
 
-      // Get the S3 URL for display
-      const s3Url = await getS3VideoUrl(filename);
-      setRecordedBlobUrl(s3Url);
+          // Get the S3 URL for display
+          const s3Url = await getS3VideoUrl(filename);
+          console.log('Got S3 URL:', s3Url);
+          setRecordedBlobUrl(s3Url);
 
-      // stop webcam
-      stream.getTracks().forEach((t) => t.stop());
-    };
+          // stop webcam
+          stream.getTracks().forEach((t) => t.stop());
+          console.log('Recording completed successfully');
+        } catch (error) {
+          console.error('Error in recorder.onstop:', error);
+          throw error;
+        }
+      };
 
-    recorder.start();
-    setRecording(true);
+      recorder.start();
+      setRecording(true);
+      console.log('Recorder started');
 
-    // Restart tutorial from beginning when recording begins
-    if (tutorialRef.current) {
-      tutorialRef.current.currentTime = 0;
-      tutorialRef.current.play().catch((err) =>
-        console.warn("Tutorial restart failed:", err)
-      );
+      // Restart tutorial from beginning when recording begins
+      if (tutorialRef.current) {
+        tutorialRef.current.currentTime = 0;
+        tutorialRef.current.play().catch((err) =>
+          console.warn("Tutorial restart failed:", err)
+        );
+      }
+    } catch (error) {
+      console.error('Error in startRecording:', error);
+      throw error;
     }
   };
 
   const startCountdownThenRecord = () => {
-    tutorialRef.current?.pause();
-    setCountdown(3);
-    let current = 3;
+    try {
+      console.log('Starting countdown');
+      tutorialRef.current?.pause();
+      setCountdown(3);
+      let current = 3;
 
-    const countdownInterval = setInterval(() => {
-      current -= 1;
-      if (current === 0) {
-        clearInterval(countdownInterval);
-        setCountdown(null);
-        startRecording();
-      } else {
-        setCountdown(current);
-      }
-    }, 1000);
+      const countdownInterval = setInterval(() => {
+        current -= 1;
+        if (current === 0) {
+          clearInterval(countdownInterval);
+          setCountdown(null);
+          startRecording();
+        } else {
+          setCountdown(current);
+        }
+      }, 1000);
+    } catch (error) {
+      console.error('Error in startCountdownThenRecord:', error);
+      throw error;
+    }
   };
 
   const stopRecording = () => {
-    mediaRecorderRef.current?.stop();
-    setRecording(false);
+    try {
+      console.log('Stopping recording');
+      mediaRecorderRef.current?.stop();
+      setRecording(false);
+    } catch (error) {
+      console.error('Error in stopRecording:', error);
+      throw error;
+    }
   };
 
   const handleReRecord = async () => {
