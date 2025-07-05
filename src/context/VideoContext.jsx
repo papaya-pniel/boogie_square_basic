@@ -1,7 +1,5 @@
 import React, { createContext, useState, useEffect } from "react";
-import { API } from "@aws-amplify/api";
-import { Storage } from "@aws-amplify/storage";
-import { graphqlOperation } from "@aws-amplify/api";
+import { API, Storage, graphqlOperation } from "aws-amplify";
 import * as queries from '../graphql/queries';
 import * as mutations from '../graphql/mutations';
 
