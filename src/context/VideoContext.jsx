@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from "react";
-import { API, graphqlOperation } from "aws-amplify";
 import { GraphQLResult } from "@aws-amplify/api";
+import API from '@aws-amplify/api';
+import { graphqlOperation } from '@aws-amplify/api';
 import * as queries from '../graphql/queries';
 import * as mutations from '../graphql/mutations';
 
@@ -113,7 +114,7 @@ export function VideoProvider({ children }) {
   const handleGridCompletion = async () => {
     try {
       // Mark current grid as inactive and save it as completed
-      const completedGrid = await API.graphql(graphqlOperation(updateGrid, {
+      const completedGrid = await API.graphql(graphqlOperation(mutations.updateGrid, {
         input: {
           id: currentGridId,
           isActive: false,
@@ -130,7 +131,7 @@ export function VideoProvider({ children }) {
       setVideos(newGrid.videos);
 
       // Save grid completion in UserGrid model
-      await API.graphql(graphqlOperation(createUserGrid, {
+      await API.graphql(graphqlOperation(mutations.createUserGrid, {
         input: {
           userId: user.id,
           gridId: currentGridId,
@@ -145,7 +146,7 @@ export function VideoProvider({ children }) {
   // Add a function to get all completed grids
   const getCompletedGrids = async () => {
     try {
-      const grids = await API.graphql(graphqlOperation(listGrids, {
+      const grids = await API.graphql(graphqlOperation(queries.listGrids, {
         filter: {
           status: { eq: 'COMPLETED' }
         },
@@ -164,7 +165,7 @@ export function VideoProvider({ children }) {
   // Add a function to get grid history for a user
   const getUserGridHistory = async (userId) => {
     try {
-      const grids = await API.graphql(graphqlOperation(listGrids, {
+      const grids = await API.graphql(graphqlOperation(queries.listGrids, {
         filter: {
           status: { eq: 'COMPLETED' },
           users: {

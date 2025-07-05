@@ -11,6 +11,7 @@ export const createGrid = /* GraphQL */ `
       completedAt
       createdAt
       updatedAt
+      users
     }
   }
 `;
@@ -25,6 +26,23 @@ export const updateGrid = /* GraphQL */ `
       videos
       isActive
       status
+      completedAt
+      createdAt
+      updatedAt
+      users
+    }
+  }
+`;
+
+export const createUserGrid = /* GraphQL */ `
+  mutation CreateUserGrid(
+    $input: CreateUserGridInput!
+    $condition: ModelUserGridConditionInput
+  ) {
+    createUserGrid(input: $input, condition: $condition) {
+      id
+      userId
+      gridId
       completedAt
       createdAt
       updatedAt
