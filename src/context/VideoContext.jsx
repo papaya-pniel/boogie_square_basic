@@ -45,7 +45,7 @@ export function VideoProvider({ children }) {
 
   const createNewGrid = async () => {
     try {
-      const response = await API.graphql(graphqlOperation(mutations.createGrid, {
+      const response = await GraphQLAPI.graphql(graphqlOperation(mutations.createGrid, {
         input: {
           videos: Array(4).fill(null),
           isActive: true
@@ -91,7 +91,7 @@ export function VideoProvider({ children }) {
       const updatedVideos = [...videos];
       updatedVideos[index] = s3Key;
       
-      await API.graphql(graphqlOperation(mutations.updateGrid, {
+      await GraphQLAPI.graphql(graphqlOperation(mutations.updateGrid, {
         input: {
           id: currentGridId,
           videos: updatedVideos
@@ -112,7 +112,7 @@ export function VideoProvider({ children }) {
   const handleGridCompletion = async () => {
     try {
       // Mark current grid as inactive and save it as completed
-      const completedGrid = await API.graphql(graphqlOperation(mutations.updateGrid, {
+      const completedGrid = await GraphQLAPI.graphql(graphqlOperation(mutations.updateGrid, {
         input: {
           id: currentGridId,
           isActive: false,
@@ -129,7 +129,7 @@ export function VideoProvider({ children }) {
       setVideos(newGrid.videos);
 
       // Save grid completion in UserGrid model
-      await API.graphql(graphqlOperation(mutations.createUserGrid, {
+      await GraphQLAPI.graphql(graphqlOperation(mutations.createUserGrid, {
         input: {
           userId: user.id,
           gridId: currentGridId,
