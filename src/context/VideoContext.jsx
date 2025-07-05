@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { uploadData, downloadData, remove } from "aws-amplify/storage";
 import { GraphQLAPI, graphqlOperation } from "@aws-amplify/api-graphql";
-import { useAuthenticator } from "@aws-amplify/ui-react";
+import { Auth } from "aws-amplify";
 
 const Storage = {
   async put(filename, blob, options) {
@@ -18,15 +18,32 @@ import * as mutations from '../graphql/mutations';
 export const VideoContext = createContext();
 
 export function VideoProvider({ children }) {
-  const { user } = useAuthenticator();
   const [videos, setVideos] = useState(Array(4).fill(null));
   const [currentGridId, setCurrentGridId] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [user, setUser] = useState(null);
 
-  // Initialize grid on component mount
+  // Get current user on mount
   useEffect(() => {
-    initializeGrid();
+    const getCurrentUser = async () => {
+      try {
+        const currentUser = await Auth.currentAuthenticatedUser();
+        setUser(currentUser);
+      } catch (error) {
+        console.error('Error getting current user:', error);
+        setError('Failed to get user authentication');
+      }
+    };
+    getCurrentUser();
   }, []);
+
+  // Initialize grid when user is authenticated
+  useEffect(() => {
+    if (user) {
+      initializeGrid();
+    }
+  }, [user]);
 
   const initializeGrid = async () => {
     try {
