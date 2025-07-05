@@ -2,9 +2,16 @@
 import React, { useContext, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
-import { createStorageManager } from "@aws-amplify/storage";
+import { uploadData, downloadData, remove } from "aws-amplify/storage";
 
-const Storage = createStorageManager();
+const Storage = {
+  async put(filename, blob, options) {
+    return await uploadData(filename, blob, options);
+  },
+  async get(s3Key, options) {
+    return await downloadData(s3Key, options);
+  }
+};
 
 export default function MainGrid() {
   const navigate = useNavigate();

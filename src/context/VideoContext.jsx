@@ -1,8 +1,16 @@
 import React, { createContext, useState, useEffect } from "react";
-import { createStorageManager } from "@aws-amplify/storage";
+import { uploadData, downloadData, remove } from "aws-amplify/storage";
 import { GraphQLAPI, graphqlOperation } from "@aws-amplify/api-graphql";
 
-const Storage = createStorageManager();
+const Storage = {
+  async put(filename, blob, options) {
+    return await uploadData(filename, blob, options);
+  },
+  async get(s3Key, options) {
+    return await downloadData(s3Key, options);
+  }
+};
+
 import * as queries from '../graphql/queries';
 import * as mutations from '../graphql/mutations';
 

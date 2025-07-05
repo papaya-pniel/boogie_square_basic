@@ -2,9 +2,16 @@ import React, { useContext, useRef, useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
-import { createStorageManager } from "@aws-amplify/storage";
+import { uploadData, downloadData, remove } from "aws-amplify/storage";
 
-const Storage = createStorageManager();
+const Storage = {
+  async put(filename, blob, options) {
+    return await uploadData(filename, blob, options);
+  },
+  async get(s3Key, options) {
+    return await downloadData(s3Key, options);
+  }
+};
 
 export default function RecordPage() {
   const { index } = useParams();
