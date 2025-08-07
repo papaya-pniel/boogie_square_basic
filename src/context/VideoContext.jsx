@@ -58,11 +58,12 @@ export function VideoProvider({ children }) {
       if (key === SHARED_GRID_KEY) {
         setVideos([...data]);
       } else if (key === SHARED_CONTRIBUTIONS_KEY) {
-        // Recalculate user contributions
+        // Recalculate user contributions using email as persistent identifier
         if (user) {
+          const userEmail = user.username || user.email;
           const userContribs = new Set();
           data.forEach(contrib => {
-            if (contrib.userId === user.userId) {
+            if (contrib.userEmail === userEmail || contrib.userId === user.userId) {
               userContribs.add(contrib.position);
             }
           });
@@ -75,18 +76,61 @@ export function VideoProvider({ children }) {
     return () => window.removeEventListener('shared-grid-update', handleSharedGridUpdate);
   }, [user]);
 
-  // Shared grid storage keys
+  // Periodic sync to catch updates from other browser contexts (like incognito)
+  useEffect(() => {
+    if (!user) return;
+
+    const syncInterval = setInterval(() => {
+      try {
+        const currentVideos = getSharedData(SHARED_GRID_KEY);
+        const currentContribs = getSharedData(SHARED_CONTRIBUTIONS_KEY);
+        
+        // Check if videos have changed
+        const videosChanged = JSON.stringify(currentVideos) !== JSON.stringify(videos);
+        if (videosChanged) {
+          console.log('Detected external video changes, syncing...');
+          setVideos([...currentVideos]);
+        }
+        
+        // Update user contributions using email as persistent identifier
+        const userEmail = user.username || user.email;
+        const userContribs = new Set();
+        currentContribs.forEach(contrib => {
+          if (contrib.userEmail === userEmail || contrib.userId === user.userId) {
+            userContribs.add(contrib.position);
+          }
+        });
+        
+        // Check if contributions changed
+        const contribsChanged = userContribs.size !== userContributions.size || 
+          ![...userContribs].every(pos => userContributions.has(pos));
+        if (contribsChanged) {
+          console.log('Detected contribution changes, updating...');
+          setUserContributions(userContribs);
+        }
+      } catch (error) {
+        console.error('Error during periodic sync:', error);
+      }
+    }, 3000); // Check every 3 seconds
+
+    return () => clearInterval(syncInterval);
+  }, [user, videos, userContributions]);
+
+  // Shared grid storage keys - using more universal storage
   const SHARED_GRID_KEY = 'shared-boogie-grid';
   const SHARED_CONTRIBUTIONS_KEY = 'shared-boogie-contributions';
+  
+  // Create a universal grid identifier that works across all browser contexts
+  const UNIVERSAL_GRID_ID = 'universal-boogie-grid-v1';
 
-  // Shared storage helpers
+  // Simple localStorage-based shared storage (works within same browser context)
   const getSharedData = (key) => {
     try {
       let data = localStorage.getItem(key);
       if (!data) {
-        const emptyData = key.includes('grid') ? JSON.stringify(Array(16).fill(null)) : JSON.stringify([]);
-        localStorage.setItem(key, emptyData);
-        return JSON.parse(emptyData);
+        const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
+        localStorage.setItem(key, JSON.stringify(emptyData));
+        return emptyData;
       }
       return JSON.parse(data);
     } catch (error) {
@@ -98,8 +142,15 @@ export function VideoProvider({ children }) {
   const setSharedData = (key, data) => {
     try {
       localStorage.setItem(key, JSON.stringify(data));
-      // Trigger event for other tabs to sync
+      
+      // Store timestamp for debugging
+      localStorage.setItem(key + '-timestamp', new Date().toISOString());
+      
+      // Trigger event for same-browser tabs to sync
       window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
+      
+      console.log('📊 Shared data updated:', key, data);
+      console.log('📊 Storage context:', localStorage.getItem('storage-context') || 'unknown');
     } catch (error) {
       console.error('Error setting shared data:', error);
     }
@@ -108,6 +159,11 @@ export function VideoProvider({ children }) {
   const initializeGrid = async () => {
     try {
       console.log('Initializing shared grid for user:', user.userId);
+      
+      // Set a storage context identifier for debugging
+      const userEmail = user.username || user.email;
+      localStorage.setItem('storage-context', `${userEmail}-${Date.now()}`);
+      localStorage.setItem('current-user-email', userEmail);
       
       // Load shared videos and contributions
       const sharedVideos = getSharedData(SHARED_GRID_KEY);
@@ -119,18 +175,29 @@ export function VideoProvider({ children }) {
       }
       setVideos(sharedVideos);
 
-      // Calculate user's contributions from shared data
+      // Calculate user's contributions from shared data using email as persistent identifier
+      const userEmail = user.username || user.email;
       const userContribs = new Set();
       sharedContributions.forEach(contrib => {
-        if (contrib.userId === user.userId) {
+        if (contrib.userEmail === userEmail) {
           userContribs.add(contrib.position);
         }
       });
       setUserContributions(userContribs);
 
       console.log('Grid initialized from shared storage');
-      console.log('Shared videos count:', sharedVideos.filter(v => v !== null).length);
-      console.log('User contributions:', Array.from(userContribs));
+      console.log('🎭 User Identity:', { 
+        userId: user.userId, 
+        email: userEmail, 
+        transientId: user.userId.substring(0, 8) + '...' 
+      });
+      console.log('📊 Shared videos count:', sharedVideos.filter(v => v !== null).length);
+      console.log('🎯 User contributions:', Array.from(userContribs));
+      console.log('📋 All contributions:', sharedContributions.map(c => ({ 
+        position: c.position, 
+        email: c.userEmail, 
+        isThisUser: c.userEmail === userEmail 
+      })));
     } catch (error) {
       console.error('Error initializing grid:', error);
     } finally {
@@ -202,9 +269,16 @@ export function VideoProvider({ children }) {
       updatedContributions.add(index);
       setUserContributions(updatedContributions);
       
-      // Save contributions to shared storage
+      // Save contributions to shared storage using email as persistent identifier
       const allContributions = getSharedData(SHARED_CONTRIBUTIONS_KEY);
-      allContributions.push({ position: index, userId: user.userId, username: user.username || user.email });
+      const userEmail = user.username || user.email;
+      allContributions.push({ 
+        position: index, 
+        userId: user.userId, // Keep for backward compatibility
+        userEmail: userEmail, // Primary identifier for persistence
+        username: user.username || user.email,
+        timestamp: new Date().toISOString()
+      });
       setSharedData(SHARED_CONTRIBUTIONS_KEY, allContributions);
       
       // Check if grid is complete
@@ -287,6 +361,27 @@ export function VideoProvider({ children }) {
     console.log('Shared grid cleared');
   };
 
+  // Helper function to sync user data across browser contexts
+  const syncUserAcrossContexts = (targetUserEmail) => {
+    try {
+      const allContributions = getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const userContribs = new Set();
+      
+      allContributions.forEach(contrib => {
+        if (contrib.userEmail === targetUserEmail) {
+          userContribs.add(contrib.position);
+        }
+      });
+      
+      setUserContributions(userContribs);
+      console.log(`🔄 Synced user data for ${targetUserEmail}:`, Array.from(userContribs));
+      return userContribs;
+    } catch (error) {
+      console.error('Error syncing user across contexts:', error);
+      return new Set();
+    }
+  };
+
   return (
     <VideoContext.Provider value={{ 
       videos, 
@@ -298,7 +393,8 @@ export function VideoProvider({ children }) {
       error,
       canContributeToPosition,
       userContributions,
-      clearSharedGrid
+      clearSharedGrid,
+      syncUserAcrossContexts
     }}>
       {children}
     </VideoContext.Provider>
