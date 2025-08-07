@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { uploadData, downloadData, remove } from "aws-amplify/storage";
 import { GraphQLAPI, graphqlOperation } from "@aws-amplify/api-graphql";
-import { Auth } from "aws-amplify";
+import { getCurrentUser } from "@aws-amplify/auth";
 
 const Storage = {
   async put(filename, blob, options) {
@@ -26,16 +26,16 @@ export function VideoProvider({ children }) {
 
   // Get current user on mount
   useEffect(() => {
-    const getCurrentUser = async () => {
+    const fetchCurrentUser = async () => {
       try {
-        const currentUser = await Auth.currentAuthenticatedUser();
+        const currentUser = await getCurrentUser();
         setUser(currentUser);
       } catch (error) {
         console.error('Error getting current user:', error);
         setError('Failed to get user authentication');
       }
     };
-    getCurrentUser();
+    fetchCurrentUser();
   }, []);
 
   // Initialize grid when user is authenticated
