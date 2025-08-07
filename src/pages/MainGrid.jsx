@@ -36,21 +36,40 @@ export default function MainGrid() {
   const [videoUrls, setVideoUrls] = useState([]);
 
   useEffect(() => {
+    let isMounted = true;
+    
     async function fetchVideoUrls() {
-      const urls = await Promise.all(
-        videos.map(async (video) => {
-          if (!video) return null;
-          try {
-            return await getS3VideoUrl(video);
-          } catch (error) {
-            console.error('Error fetching video URL:', error);
-            return null;
-          }
-        })
-      );
-      setVideoUrls(urls);
+      try {
+        const urls = await Promise.all(
+          videos.map(async (video) => {
+            if (!video) return null;
+            try {
+              return await getS3VideoUrl(video);
+            } catch (error) {
+              console.error('Error fetching video URL:', error);
+              return null;
+            }
+          })
+        );
+        
+        // Only update state if component is still mounted
+        if (isMounted) {
+          setVideoUrls(urls);
+        }
+      } catch (error) {
+        console.error('Error fetching video URLs:', error);
+        if (isMounted) {
+          setVideoUrls([]);
+        }
+      }
     }
+    
     fetchVideoUrls();
+    
+    // Cleanup function to prevent state updates after unmount
+    return () => {
+      isMounted = false;
+    };
   }, [videos, getS3VideoUrl]);
 
   const paddedVideos = [...videoUrls];
@@ -75,6 +94,7 @@ export default function MainGrid() {
   useEffect(() => {
     let loaded = 0;
     const total = paddedVideos.filter(Boolean).length;
+    const videoElements = [];
 
     if (total === 0) {
       setGridReady(true);
@@ -85,6 +105,8 @@ export default function MainGrid() {
       if (!src) return;
       const video = document.createElement("video");
       video.src = src;
+      videoElements.push(video);
+      
       video.onloadeddata = () => {
         loaded += 1;
         if (loaded >= total) {
@@ -99,6 +121,15 @@ export default function MainGrid() {
         }
       };
     });
+
+    // Cleanup function to remove video elements and event listeners
+    return () => {
+      videoElements.forEach(video => {
+        video.onloadeddata = null;
+        video.onerror = null;
+        video.src = '';
+      });
+    };
   }, [paddedVideos]);
 
   const handleSlotClick = (index) => {

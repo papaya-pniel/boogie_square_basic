@@ -136,6 +136,8 @@ export function VideoProvider({ children }) {
       }
     } catch (error) {
       console.error('Error updating video:', error);
+      setError(`Failed to update video: ${error.message}`);
+      throw error; // Re-throw to allow calling code to handle
     }
   };
 
@@ -223,7 +225,17 @@ export function VideoProvider({ children }) {
   };
 
   return (
-    <VideoContext.Provider value={{ videos, updateVideoAtIndex, isLoading }}>
+    <VideoContext.Provider value={{ 
+      videos, 
+      updateVideoAtIndex, 
+      isLoading, 
+      getS3VideoUrl,
+      getCompletedGrids,
+      getUserGridHistory,
+      currentGridId,
+      user,
+      error
+    }}>
       {children}
     </VideoContext.Provider>
   );

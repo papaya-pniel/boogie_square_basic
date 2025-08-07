@@ -25,6 +25,8 @@ export default function RecordPage() {
   const [recording, setRecording] = useState(false);
   const [recordedBlobUrl, setRecordedBlobUrl] = useState(null);
   const [countdown, setCountdown] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
 
   const videoRef = useRef(null);
   const tutorialRef = useRef(null);
@@ -71,6 +73,9 @@ export default function RecordPage() {
       recorder.onstop = async () => {
         try {
           console.log('Recorder stopped');
+          setIsUploading(true);
+          setUploadError(null);
+          
           const blob = new Blob(chunksRef.current, { type: "video/webm" });
           
           // First upload to S3
@@ -96,7 +101,10 @@ export default function RecordPage() {
           console.log('Recording completed successfully');
         } catch (error) {
           console.error('Error in recorder.onstop:', error);
+          setUploadError('Failed to upload video. Please try again.');
           throw error;
+        } finally {
+          setIsUploading(false);
         }
       };
 
@@ -209,25 +217,45 @@ export default function RecordPage() {
         </>
       ) : (
         <>
-          <video
-            src={recordedBlobUrl}
-            controls
-            className="w-full max-w-xl rounded-none"
-          />
+          {isUploading && (
+            <div className="text-center mb-4">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+              <p className="text-gray-300">Uploading your video...</p>
+            </div>
+          )}
+          
+          {uploadError && (
+            <div className="text-center mb-4">
+              <p className="text-red-400 mb-4">{uploadError}</p>
+              <Button onClick={handleReRecord} className="mt-2">
+                Try Again
+              </Button>
+            </div>
+          )}
+          
+          {recordedBlobUrl && !isUploading && (
+            <>
+              <video
+                src={recordedBlobUrl}
+                controls
+                className="w-full max-w-xl rounded-none"
+              />
 
-          <div className="flex gap-4 mt-4">
-            <Button
-              onClick={() => {
-                updateVideoAtIndex(slotToUpdate, recordedBlobUrl);
-                navigate("/");
-              }}
-            >
-              Save & Return to Grid
-            </Button>
-            <Button variant="secondary" onClick={handleReRecord}>
-              Re-record
-            </Button>
-          </div>
+              <div className="flex gap-4 mt-4">
+                <Button
+                  onClick={() => {
+                    updateVideoAtIndex(slotToUpdate, recordedBlobUrl);
+                    navigate("/");
+                  }}
+                >
+                  Save & Return to Grid
+                </Button>
+                <Button variant="secondary" onClick={handleReRecord}>
+                  Re-record
+                </Button>
+              </div>
+            </>
+          )}
         </>
       )}
     </div>
