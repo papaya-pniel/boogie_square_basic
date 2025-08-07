@@ -1,4 +1,28 @@
 type User @model {
   email: String!
   name: String!
+  videos: [Video] @hasMany(indexName: "byUser", fields: ["id"])
+}
+
+type Grid @model {
+  id: ID!
+  name: String
+  isActive: Boolean! @default(value: "true")
+  status: String @default(value: "ACTIVE") # ACTIVE, COMPLETED, ARCHIVED
+  videos: [Video] @hasMany(indexName: "byGrid", fields: ["id"])
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  completedAt: AWSDateTime
+}
+
+type Video @model {
+  id: ID!
+  s3Key: String!
+  gridId: ID!
+  userId: ID!
+  position: Int! # Position in the grid (0-3)
+  user: User @belongsTo(fields: ["userId"])
+  grid: Grid @belongsTo(fields: ["gridId"])
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
 }

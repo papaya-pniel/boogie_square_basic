@@ -15,24 +15,21 @@ const Storage = {
 
 export default function MainGrid() {
   const navigate = useNavigate();
-  const { videos, updateVideoAtIndex, isLoading, getS3VideoUrl } = useContext(VideoContext);
+  const { 
+    videos, 
+    updateVideoAtIndex, 
+    isLoading, 
+    getS3VideoUrl, 
+    canContributeToPosition, 
+    userContributions,
+    user 
+  } = useContext(VideoContext);
   const [selectedSong, setSelectedSong] = useState("none.mp3");
-  const [gridSize, _setGridSize] = useState(4);
-  const [pattern, _setPattern] = useState(() => localStorage.getItem("pattern") || "default");
+  const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
   const [gridReady, setGridReady] = useState(false);
 
-  const setGridSize = (size) => {
-    _setGridSize(size);
-    localStorage.setItem("gridSize", size.toString());
-  };
-
-  const setPattern = (pat) => {
-    _setPattern(pat);
-    localStorage.setItem("pattern", pat);
-  };
-
   const audioRef = useRef();
-  const totalSlots = gridSize * gridSize;
+  const totalSlots = 16; // Always 16 squares
   const [videoUrls, setVideoUrls] = useState([]);
 
   useEffect(() => {
@@ -84,14 +81,6 @@ export default function MainGrid() {
   }, [selectedSong]);
 
   useEffect(() => {
-    if (pattern === "center-focus") setGridSize(4);
-  }, [pattern]);
-
-  useEffect(() => {
-    if (pattern === "center-focus" && gridSize !== 4) setPattern("default");
-  }, [gridSize, pattern]);
-
-  useEffect(() => {
     let loaded = 0;
     const total = paddedVideos.filter(Boolean).length;
     const videoElements = [];
@@ -133,7 +122,28 @@ export default function MainGrid() {
   }, [paddedVideos]);
 
   const handleSlotClick = (index) => {
+    // Check if user can contribute to this position
+    if (!canContributeToPosition(index)) {
+      alert('This position is already filled by another user.');
+      return;
+    }
     navigate(`/train/${index}`);
+  };
+
+  const getSlotStyle = (index) => {
+    const canContribute = canContributeToPosition(index);
+    const hasUserContribution = userContributions.has(index);
+    const isFilled = videos[index] !== null;
+
+    if (hasUserContribution) {
+      return "bg-green-500/20 border-green-400"; // User's contribution
+    } else if (isFilled) {
+      return "bg-blue-500/20 border-blue-400"; // Other user's contribution
+    } else if (canContribute) {
+      return "bg-yellow-500/20 border-yellow-400 cursor-pointer hover:bg-yellow-500/30"; // Available for user
+    } else {
+      return "bg-gray-500/20 border-gray-400"; // Not available (user already contributed)
+    }
   };
 
   if (isLoading) {
@@ -159,74 +169,57 @@ export default function MainGrid() {
     >
       <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-2 gap-2">
         <h1 className="text-4xl font-bold text-center">Boogie Square</h1>
-        <p className="text-gray-200 text-center">Choose a square to learn a choreography and record yourself.</p>
+        <p className="text-gray-200 text-center">Collaborative Dance Grid - Choose an available square to contribute!</p>
+        
+        {/* User Info */}
+        {user && (
+          <div className="text-sm text-gray-200 mb-2">
+            Welcome, {user.username || user.email}! 
+            {userContributions.size === 0 
+              ? "Choose one empty square to record your dance." 
+              : "You've already contributed to this grid!"}
+          </div>
+        )}
 
-        {/* Pattern Dropdown */}
-        <div className="flex items-center gap-2 mb-4">
-          <label htmlFor="pattern" className="text-sm text-white">🧩 Choose Pattern:</label>
-          <select
-            id="pattern"
-            value={pattern}
-            onChange={(e) => setPattern(e.target.value)}
-            className="bg-white/10 border border-white/20 text-white px-3 py-1 rounded-none"
-          >
-            <option value="default">Default Grid</option>
-            {gridSize === 4 && <option value="center-focus">Center Focus</option>}
-          </select>
+        {/* Legend */}
+        <div className="flex gap-4 text-xs mb-4">
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-yellow-400 rounded"></div>
+            <span>Available</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-green-400 rounded"></div>
+            <span>Your video</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-blue-400 rounded"></div>
+            <span>Other users</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="w-3 h-3 bg-gray-400 rounded"></div>
+            <span>Unavailable</span>
+          </div>
         </div>
 
         {/* Grid */}
         <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-xl">
-          {pattern === "center-focus" ? (
-            <div
-              className="grid gap-0"
-              style={{
-                gridTemplateColumns: `repeat(4, 1fr)`,
-                gridTemplateRows: `repeat(4, 1fr)`,
-                width: "min(70vw, 70vh)",
-                height: "min(70vw, 70vh)"
-              }}
-            >
-              {Array.from({ length: 16 }).map((_, idx) => {
-                const isCenter = [5, 6, 9, 10].includes(idx);
-                if (isCenter) return null;
-
-                const centerVideo = paddedVideos[5];
-                const src = paddedVideos[idx];
-                const gridStyle = {};
-
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => handleSlotClick(idx)}
-                    style={gridStyle}
-                    className="relative flex items-center justify-center cursor-pointer bg-white/10 rounded-none overflow-hidden"
-                  >
-                    {src ? (
-                      <video src={src} autoPlay muted loop playsInline className="w-full h-full object-cover" />
-                    ) : (
-                      <>
-                        <video
-                          src="/boogie_square_tutorial.mp4"
-                          autoPlay
-                          muted
-                          loop
-                          playsInline
-                          className="absolute inset-0 w-full h-full object-cover opacity-40 z-0"
-                        />
-                        <span className="text-4xl text-white/40 font-bold z-10 relative">+</span>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+          <div
+            className="grid gap-0"
+            style={{
+              gridTemplateColumns: `repeat(4, 1fr)`,
+              gridTemplateRows: `repeat(4, 1fr)`,
+              width: "min(70vw, 70vh)",
+              height: "min(70vw, 70vh)"
+            }}
+          >
+            {paddedVideos.map((src, idx) => (
               <div
-                className="relative flex items-center justify-center cursor-pointer bg-purple-600 overflow-hidden"
-                style={{ gridColumn: "2 / span 2", gridRow: "2 / span 2", zIndex: 10 }}
-                onClick={() => handleSlotClick(5)}
+                key={idx}
+                onClick={() => handleSlotClick(idx)}
+                className={`relative flex items-center justify-center rounded-none overflow-hidden border-2 ${getSlotStyle(idx)}`}
               >
-                {paddedVideos[5] ? (
-                  <video src={paddedVideos[5]} autoPlay muted loop playsInline className="w-full h-full object-cover" />
+                {src ? (
+                  <video src={src} autoPlay muted loop playsInline className="w-full h-full object-cover" />
                 ) : (
                   <>
                     <video
@@ -241,44 +234,8 @@ export default function MainGrid() {
                   </>
                 )}
               </div>
-            </div>
-          ) : (
-            <div
-              className="grid gap-0"
-              style={{
-                gridTemplateColumns: `repeat(${gridSize}, 1fr)`,
-                gridTemplateRows: `repeat(${gridSize}, 1fr)`,
-                width: "min(70vw, 70vh)",
-                height: "min(70vw, 70vh)"
-              }}
-            >
-              {paddedVideos.map((src, idx) => (
-                <div
-                  key={idx}
-                  onClick={() => handleSlotClick(idx)}
-                  className="relative flex items-center justify-center bg-white/10 cursor-pointer rounded-none overflow-hidden"
-                >
-                  {src ? (
-                    <video src={src} autoPlay muted loop playsInline className="w-full h-full object-cover" />
-                  ) : (
-                    <>
-                      {gridSize === 4 && (
-                        <video
-                          src="/boogie_square_tutorial.mp4"
-                          autoPlay
-                          muted
-                          loop
-                          playsInline
-                          className="absolute inset-0 w-full h-full object-cover opacity-40 z-0"
-                        />
-                      )}
-                      <span className="text-4xl text-white/40 font-bold z-10 relative">+</span>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
         {/* Audio Player */}

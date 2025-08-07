@@ -4,22 +4,13 @@ import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
 import { uploadData, downloadData, remove } from "aws-amplify/storage";
 
-const Storage = {
-  async put(filename, blob, options) {
-    return await uploadData(filename, blob, options);
-  },
-  async get(s3Key, options) {
-    return await downloadData(s3Key, options);
-  }
-};
-
 export default function RecordPage() {
   const { index } = useParams();
   const idxNum = parseInt(index, 10);
   // If we're in center-focus pattern, map indices 5,6,9,10 → 5
   const slotToUpdate = [5, 6, 9, 10].includes(idxNum) ? 5 : idxNum;
 
-  const { updateVideoAtIndex, getS3VideoUrl } = useContext(VideoContext);
+  const { updateVideoAtIndex, getS3VideoUrl, canContributeToPosition } = useContext(VideoContext);
   const navigate = useNavigate();
 
   const [recording, setRecording] = useState(false);
@@ -34,12 +25,32 @@ export default function RecordPage() {
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
 
+  // Check if user can contribute to this position
+  useEffect(() => {
+    if (!canContributeToPosition(slotToUpdate)) {
+      alert('You cannot contribute to this position. It may already be filled or you have already contributed to it.');
+      navigate('/');
+    }
+  }, [canContributeToPosition, slotToUpdate, navigate]);
+
   // Map grid slot index to tutorial filename
   const tutorialMap = {
     0: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
     1: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
     2: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
     3: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
+    4: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
+    5: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
+    6: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
+    7: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
+    8: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
+    9: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
+    10: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
+    11: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
+    12: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
+    13: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
+    14: { src: "/boogie_square_tutorial_2.mp4", title: "Hip Hop Flow B" },
+    15: { src: "/boogie_square_tutorial.mp4", title: "Boogie Square A" },
   };
   const tutorial = tutorialMap[idxNum] || { src: "/boogie_square_tutorial.mp4", title: "Default" };
   const tutorialVideoUrl = tutorial.src;
@@ -78,31 +89,16 @@ export default function RecordPage() {
           
           const blob = new Blob(chunksRef.current, { type: "video/webm" });
           
-          // First upload to S3
-          const timestamp = new Date().toISOString();
-          const filename = `videos/${slotToUpdate}_${timestamp}.webm`;
-          console.log('Uploading to S3:', filename);
-          await Storage.put(filename, blob, {
-            contentType: 'video/webm',
-            level: 'private'
-          });
-
-          // Then update the grid with the S3 key
-          console.log('Updating grid with S3 key:', filename);
-          await updateVideoAtIndex(slotToUpdate, filename);
-
-          // Get the S3 URL for display
-          const s3Url = await getS3VideoUrl(filename);
-          console.log('Got S3 URL:', s3Url);
-          setRecordedBlobUrl(s3Url);
+          // Create a blob URL for preview
+          const blobUrl = URL.createObjectURL(blob);
+          setRecordedBlobUrl(blobUrl);
 
           // stop webcam
           stream.getTracks().forEach((t) => t.stop());
           console.log('Recording completed successfully');
         } catch (error) {
           console.error('Error in recorder.onstop:', error);
-          setUploadError('Failed to upload video. Please try again.');
-          throw error;
+          setUploadError('Failed to process recording. Please try again.');
         } finally {
           setIsUploading(false);
         }
@@ -159,10 +155,30 @@ export default function RecordPage() {
     }
   };
 
+  const handleSaveVideo = async () => {
+    try {
+      setIsUploading(true);
+      setUploadError(null);
+      
+      // Get the blob from the blob URL
+      const response = await fetch(recordedBlobUrl);
+      const blob = await response.blob();
+      
+      // Update the grid (this will handle S3 upload and database update)
+      await updateVideoAtIndex(slotToUpdate, recordedBlobUrl);
+      
+      // Navigate back to grid
+      navigate("/");
+    } catch (error) {
+      console.error('Error saving video:', error);
+      setUploadError('Failed to save video. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const handleReRecord = async () => {
     setRecordedBlobUrl(null);
-    // Clear the grid slot
-    await updateVideoAtIndex(slotToUpdate, null);
     setRecording(false);
   };
 
@@ -220,7 +236,7 @@ export default function RecordPage() {
           {isUploading && (
             <div className="text-center mb-4">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
-              <p className="text-gray-300">Uploading your video...</p>
+              <p className="text-gray-300">Saving your video...</p>
             </div>
           )}
           
@@ -243,10 +259,8 @@ export default function RecordPage() {
 
               <div className="flex gap-4 mt-4">
                 <Button
-                  onClick={() => {
-                    updateVideoAtIndex(slotToUpdate, recordedBlobUrl);
-                    navigate("/");
-                  }}
+                  onClick={handleSaveVideo}
+                  disabled={isUploading}
                 >
                   Save & Return to Grid
                 </Button>

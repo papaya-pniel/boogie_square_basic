@@ -5,13 +5,12 @@ export const createGrid = /* GraphQL */ `
   ) {
     createGrid(input: $input, condition: $condition) {
       id
-      videos
+      name
       isActive
       status
       completedAt
       createdAt
       updatedAt
-      users
     }
   }
 `;
@@ -23,27 +22,74 @@ export const updateGrid = /* GraphQL */ `
   ) {
     updateGrid(input: $input, condition: $condition) {
       id
-      videos
+      name
       isActive
       status
       completedAt
       createdAt
       updatedAt
-      users
     }
   }
 `;
 
-export const createUserGrid = /* GraphQL */ `
-  mutation CreateUserGrid(
-    $input: CreateUserGridInput!
-    $condition: ModelUserGridConditionInput
+export const createVideo = /* GraphQL */ `
+  mutation CreateVideo(
+    $input: CreateVideoInput!
+    $condition: ModelVideoConditionInput
   ) {
-    createUserGrid(input: $input, condition: $condition) {
+    createVideo(input: $input, condition: $condition) {
       id
-      userId
+      s3Key
       gridId
-      completedAt
+      userId
+      position
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const updateVideo = /* GraphQL */ `
+  mutation UpdateVideo(
+    $input: UpdateVideoInput!
+    $condition: ModelVideoConditionInput
+  ) {
+    updateVideo(input: $input, condition: $condition) {
+      id
+      s3Key
+      gridId
+      userId
+      position
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const createUser = /* GraphQL */ `
+  mutation CreateUser(
+    $input: CreateUserInput!
+    $condition: ModelUserConditionInput
+  ) {
+    createUser(input: $input, condition: $condition) {
+      id
+      email
+      name
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const updateUser = /* GraphQL */ `
+  mutation UpdateUser(
+    $input: UpdateUserInput!
+    $condition: ModelUserConditionInput
+  ) {
+    updateUser(input: $input, condition: $condition) {
+      id
+      email
+      name
       createdAt
       updatedAt
     }
