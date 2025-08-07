@@ -1,7 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { uploadData, downloadData, remove } from "aws-amplify/storage";
 import { GraphQLAPI, graphqlOperation } from "@aws-amplify/api-graphql";
-import { Auth } from "@aws-amplify/auth";
+import Auth from "@aws-amplify/auth";
 
 const Storage = {
   async put(filename, blob, options) {
