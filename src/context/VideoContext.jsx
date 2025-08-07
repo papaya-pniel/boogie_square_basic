@@ -6,7 +6,7 @@ export const VideoContext = createContext();
 
 export function VideoProvider({ children }) {
   const [videos, setVideos] = useState(Array(16).fill(null));
-  const [currentGridId, setCurrentGridId] = useState('local-grid-1');
+  const [currentGridId, setCurrentGridId] = useState('shared-grid-1');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
@@ -49,36 +49,88 @@ export function VideoProvider({ children }) {
     }
   }, [user]);
 
+  // Listen for shared grid updates from other tabs/windows
+  useEffect(() => {
+    const handleSharedGridUpdate = (event) => {
+      const { key, data } = event.detail;
+      console.log('Received shared grid update:', key, data);
+      
+      if (key === SHARED_GRID_KEY) {
+        setVideos([...data]);
+      } else if (key === SHARED_CONTRIBUTIONS_KEY) {
+        // Recalculate user contributions
+        if (user) {
+          const userContribs = new Set();
+          data.forEach(contrib => {
+            if (contrib.userId === user.userId) {
+              userContribs.add(contrib.position);
+            }
+          });
+          setUserContributions(userContribs);
+        }
+      }
+    };
+
+    window.addEventListener('shared-grid-update', handleSharedGridUpdate);
+    return () => window.removeEventListener('shared-grid-update', handleSharedGridUpdate);
+  }, [user]);
+
+  // Shared grid storage keys
+  const SHARED_GRID_KEY = 'shared-boogie-grid';
+  const SHARED_CONTRIBUTIONS_KEY = 'shared-boogie-contributions';
+
+  // Shared storage helpers
+  const getSharedData = (key) => {
+    try {
+      let data = localStorage.getItem(key);
+      if (!data) {
+        const emptyData = key.includes('grid') ? JSON.stringify(Array(16).fill(null)) : JSON.stringify([]);
+        localStorage.setItem(key, emptyData);
+        return JSON.parse(emptyData);
+      }
+      return JSON.parse(data);
+    } catch (error) {
+      console.error('Error getting shared data:', error);
+      return key.includes('grid') ? Array(16).fill(null) : [];
+    }
+  };
+
+  const setSharedData = (key, data) => {
+    try {
+      localStorage.setItem(key, JSON.stringify(data));
+      // Trigger event for other tabs to sync
+      window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
+    } catch (error) {
+      console.error('Error setting shared data:', error);
+    }
+  };
+
   const initializeGrid = async () => {
     try {
-      console.log('Initializing grid for user:', user.userId);
+      console.log('Initializing shared grid for user:', user.userId);
       
-      // Load from localStorage for now
-      const savedVideos = localStorage.getItem('boogie-square-videos');
-      const savedContributions = localStorage.getItem('boogie-square-contributions');
-      
-      if (savedVideos) {
-        const savedVideoArray = JSON.parse(savedVideos);
-        // Ensure we have 16 slots
-        while (savedVideoArray.length < 16) {
-          savedVideoArray.push(null);
+      // Load shared videos and contributions
+      const sharedVideos = getSharedData(SHARED_GRID_KEY);
+      const sharedContributions = getSharedData(SHARED_CONTRIBUTIONS_KEY);
+
+      // Ensure 16 slots
+      while (sharedVideos.length < 16) {
+        sharedVideos.push(null);
+      }
+      setVideos(sharedVideos);
+
+      // Calculate user's contributions from shared data
+      const userContribs = new Set();
+      sharedContributions.forEach(contrib => {
+        if (contrib.userId === user.userId) {
+          userContribs.add(contrib.position);
         }
-        setVideos(savedVideoArray);
-      }
-      
-      if (savedContributions) {
-        const contributions = JSON.parse(savedContributions);
-        // Only show user's own contributions
-        const userContribs = new Set();
-        contributions.forEach(pos => {
-          if (pos.userId === user.userId) {
-            userContribs.add(pos.position);
-          }
-        });
-        setUserContributions(userContribs);
-      }
-      
-      console.log('Grid initialized from localStorage');
+      });
+      setUserContributions(userContribs);
+
+      console.log('Grid initialized from shared storage');
+      console.log('Shared videos count:', sharedVideos.filter(v => v !== null).length);
+      console.log('User contributions:', Array.from(userContribs));
     } catch (error) {
       console.error('Error initializing grid:', error);
     } finally {
@@ -138,22 +190,22 @@ export function VideoProvider({ children }) {
       // Upload video to S3 first
       const s3Key = await uploadVideoToS3(index, videoUrl);
       
-      // Update local state
+      // Update shared state
       const updatedVideos = [...videos];
       updatedVideos[index] = s3Key;
       setVideos(updatedVideos);
       
-      // Save to localStorage
-      localStorage.setItem('boogie-square-videos', JSON.stringify(updatedVideos));
+      // Save to shared storage
+      setSharedData(SHARED_GRID_KEY, updatedVideos);
       
       const updatedContributions = new Set(userContributions);
       updatedContributions.add(index);
       setUserContributions(updatedContributions);
       
-      // Save contributions to localStorage
-      const allContributions = JSON.parse(localStorage.getItem('boogie-square-contributions') || '[]');
-      allContributions.push({ position: index, userId: user.userId });
-      localStorage.setItem('boogie-square-contributions', JSON.stringify(allContributions));
+      // Save contributions to shared storage
+      const allContributions = getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      allContributions.push({ position: index, userId: user.userId, username: user.username || user.email });
+      setSharedData(SHARED_CONTRIBUTIONS_KEY, allContributions);
       
       // Check if grid is complete
       if (updatedVideos.every(v => v !== null)) {
@@ -168,17 +220,34 @@ export function VideoProvider({ children }) {
 
   const handleGridCompletion = async () => {
     try {
-      console.log('Grid completed! Creating new grid...');
+      console.log('Grid completed with 16 videos! Creating new grid...');
       
-      // Reset for new grid
+      // Archive the completed grid
+      const completedGrid = {
+        id: currentGridId,
+        videos: [...videos],
+        contributions: getSharedData(SHARED_CONTRIBUTIONS_KEY),
+        completedAt: new Date().toISOString()
+      };
+      
+      // Save completed grid to history
+      const gridHistory = JSON.parse(localStorage.getItem('completed-grids') || '[]');
+      gridHistory.push(completedGrid);
+      localStorage.setItem('completed-grids', JSON.stringify(gridHistory));
+      
+      // Reset shared storage for new grid
+      setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
+      setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
+      
+      // Reset local state
       setVideos(Array(16).fill(null));
       setUserContributions(new Set());
-      localStorage.setItem('boogie-square-videos', JSON.stringify(Array(16).fill(null)));
-      localStorage.setItem('boogie-square-contributions', JSON.stringify([]));
       
       // Update grid ID
-      const newGridId = `local-grid-${Date.now()}`;
+      const newGridId = `shared-grid-${Date.now()}`;
       setCurrentGridId(newGridId);
+      
+      console.log('New grid created:', newGridId);
     } catch (error) {
       console.error('Error handling grid completion:', error);
     }
@@ -209,6 +278,15 @@ export function VideoProvider({ children }) {
     return videos[index] === null && userContributions.size === 0;
   };
 
+  // Helper function to clear shared grid (for testing)
+  const clearSharedGrid = () => {
+    setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
+    setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
+    setVideos(Array(16).fill(null));
+    setUserContributions(new Set());
+    console.log('Shared grid cleared');
+  };
+
   return (
     <VideoContext.Provider value={{ 
       videos, 
@@ -219,7 +297,8 @@ export function VideoProvider({ children }) {
       user,
       error,
       canContributeToPosition,
-      userContributions
+      userContributions,
+      clearSharedGrid
     }}>
       {children}
     </VideoContext.Provider>
