@@ -176,7 +176,6 @@ export function VideoProvider({ children }) {
       setVideos(sharedVideos);
 
       // Calculate user's contributions from shared data using email as persistent identifier
-      const userEmail = user.username || user.email;
       const userContribs = new Set();
       sharedContributions.forEach(contrib => {
         if (contrib.userEmail === userEmail) {
