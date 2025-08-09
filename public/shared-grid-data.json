@@ -1,1 +1,23 @@
-{"videos": [null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null], "contributions": [], "lastUpdated": "2025-01-08T00:00:00.000Z"}
+{
+  "videos": [
+    "http://localhost:3001/uploads/video_1754744906614.webm",
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ],
+  "contributions": {},
+  "lastUpdated": "2025-08-09T13:08:26.741Z",
+  "gridId": "shared-grid-1"
+}

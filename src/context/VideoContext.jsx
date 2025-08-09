@@ -80,10 +80,10 @@ export function VideoProvider({ children }) {
   useEffect(() => {
     if (!user) return;
 
-    const syncInterval = setInterval(() => {
+    const syncInterval = setInterval(async () => {
       try {
-        const currentVideos = getSharedData(SHARED_GRID_KEY);
-        const currentContribs = getSharedData(SHARED_CONTRIBUTIONS_KEY);
+        const currentVideos = await getSharedData(SHARED_GRID_KEY);
+        const currentContribs = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
         
         // Check if videos have changed
         const videosChanged = JSON.stringify(currentVideos) !== JSON.stringify(videos);
@@ -93,7 +93,6 @@ export function VideoProvider({ children }) {
         }
         
         // Update user contributions using email as persistent identifier
-        const userEmail = user.username || user.email;
         const userContribs = new Set();
         currentContribs.forEach(contrib => {
           if (contrib.userEmail === userEmail || contrib.userId === user.userId) {
@@ -123,9 +122,21 @@ export function VideoProvider({ children }) {
   // Create a universal grid identifier that works across all browser contexts
   const UNIVERSAL_GRID_ID = 'universal-boogie-grid-v1';
 
-  // Simple localStorage-based shared storage (works within same browser context)
-  const getSharedData = (key) => {
+  // Server-based shared storage (works across all browser contexts)
+  const getSharedData = async (key) => {
     try {
+      // Try to get from server first
+      const response = await fetch('http://localhost:3001/api/shared-grid');
+      if (response.ok) {
+        const serverData = await response.json();
+        if (key === SHARED_GRID_KEY) {
+          return serverData.videos || Array(16).fill(null);
+        } else if (key === SHARED_CONTRIBUTIONS_KEY) {
+          return serverData.contributions || [];
+        }
+      }
+      
+      // Fallback to localStorage
       let data = localStorage.getItem(key);
       if (!data) {
         const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
@@ -135,24 +146,51 @@ export function VideoProvider({ children }) {
       return JSON.parse(data);
     } catch (error) {
       console.error('Error getting shared data:', error);
-      return key.includes('grid') ? Array(16).fill(null) : [];
+      // Fallback to localStorage
+      let data = localStorage.getItem(key);
+      if (!data) {
+        const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
+        localStorage.setItem(key, JSON.stringify(emptyData));
+        return emptyData;
+      }
+      return JSON.parse(data);
     }
   };
 
-  const setSharedData = (key, data) => {
+  const setSharedData = async (key, data) => {
     try {
+      // Save to localStorage as backup
       localStorage.setItem(key, JSON.stringify(data));
       
-      // Store timestamp for debugging
-      localStorage.setItem(key + '-timestamp', new Date().toISOString());
+      // Update server
+      const currentVideos = key === SHARED_GRID_KEY ? data : getSharedData(SHARED_GRID_KEY);
+      const currentContribs = key === SHARED_CONTRIBUTIONS_KEY ? data : getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      
+      const response = await fetch('http://localhost:3001/api/shared-grid', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          videos: key === SHARED_GRID_KEY ? data : currentVideos,
+          contributions: key === SHARED_CONTRIBUTIONS_KEY ? data : currentContribs
+        })
+      });
+      
+      if (response.ok) {
+        console.log('📊 Server data updated:', key, data);
+      } else {
+        console.warn('⚠️ Server update failed, using localStorage only');
+      }
       
       // Trigger event for same-browser tabs to sync
       window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
       
-      console.log('📊 Shared data updated:', key, data);
-      console.log('📊 Storage context:', localStorage.getItem('storage-context') || 'unknown');
     } catch (error) {
       console.error('Error setting shared data:', error);
+      // Fallback to localStorage only
+      localStorage.setItem(key, JSON.stringify(data));
+      window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
     }
   };
 
@@ -166,8 +204,8 @@ export function VideoProvider({ children }) {
       localStorage.setItem('current-user-email', userEmail);
       
       // Load shared videos and contributions
-      const sharedVideos = getSharedData(SHARED_GRID_KEY);
-      const sharedContributions = getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const sharedVideos = await getSharedData(SHARED_GRID_KEY);
+      const sharedContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
 
       // Ensure 16 slots
       while (sharedVideos.length < 16) {
@@ -206,35 +244,28 @@ export function VideoProvider({ children }) {
 
   const uploadVideoToS3 = async (index, videoUrl) => {
     try {
-      // Ensure we have a currentGridId
       if (!currentGridId) {
-        console.error('No currentGridId available');
         throw new Error('Grid not initialized. Please refresh the page.');
       }
-
-      // Ensure user is properly authenticated
       const authenticatedUser = await ensureAuthenticated();
-      console.log('User authenticated for upload:', authenticatedUser.userId);
 
-      // For now, just return the blob URL instead of uploading to S3
-      // This bypasses the S3 permissions issue
-      console.log('Using blob URL instead of S3 upload for now');
-      
-      // Create a unique filename for the video (for reference)
-      const timestamp = new Date().toISOString();
-      const filename = `videos/${currentGridId}_${index}_${authenticatedUser.userId}_${timestamp}.webm`;
-      
-      console.log('Video stored as blob URL:', videoUrl);
-      
-      // Return the blob URL instead of S3 key
-      return videoUrl;
+      // Convert blob URL to ArrayBuffer
+      const blobResponse = await fetch(videoUrl);
+      const arrayBuffer = await blobResponse.arrayBuffer();
+
+      // Upload raw bytes to our local server to get a sharable URL
+      const uploadRes = await fetch('http://localhost:3001/api/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'video/webm' },
+        body: new Uint8Array(arrayBuffer)
+      });
+      if (!uploadRes.ok) {
+        throw new Error('Upload failed');
+      }
+      const { url } = await uploadRes.json();
+      return url; // sharable URL served by the local server
     } catch (error) {
       console.error('Error processing video:', error);
-      console.error('Error details:', {
-        message: error.message,
-        name: error.name,
-        stack: error.stack
-      });
       throw error;
     }
   };
@@ -262,15 +293,14 @@ export function VideoProvider({ children }) {
       setVideos(updatedVideos);
       
       // Save to shared storage
-      setSharedData(SHARED_GRID_KEY, updatedVideos);
+      await setSharedData(SHARED_GRID_KEY, updatedVideos);
       
       const updatedContributions = new Set(userContributions);
       updatedContributions.add(index);
       setUserContributions(updatedContributions);
       
       // Save contributions to shared storage using email as persistent identifier
-      const allContributions = getSharedData(SHARED_CONTRIBUTIONS_KEY);
-      const userEmail = user.username || user.email;
+      const allContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
       allContributions.push({ 
         position: index, 
         userId: user.userId, // Keep for backward compatibility
@@ -278,7 +308,7 @@ export function VideoProvider({ children }) {
         username: user.username || user.email,
         timestamp: new Date().toISOString()
       });
-      setSharedData(SHARED_CONTRIBUTIONS_KEY, allContributions);
+      await setSharedData(SHARED_CONTRIBUTIONS_KEY, allContributions);
       
       // Check if grid is complete
       if (updatedVideos.every(v => v !== null)) {
@@ -299,7 +329,7 @@ export function VideoProvider({ children }) {
       const completedGrid = {
         id: currentGridId,
         videos: [...videos],
-        contributions: getSharedData(SHARED_CONTRIBUTIONS_KEY),
+        contributions: await getSharedData(SHARED_CONTRIBUTIONS_KEY),
         completedAt: new Date().toISOString()
       };
       
@@ -309,8 +339,8 @@ export function VideoProvider({ children }) {
       localStorage.setItem('completed-grids', JSON.stringify(gridHistory));
       
       // Reset shared storage for new grid
-      setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
-      setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
+      await setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
+      await setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
       
       // Reset local state
       setVideos(Array(16).fill(null));
@@ -352,9 +382,9 @@ export function VideoProvider({ children }) {
   };
 
   // Helper function to clear shared grid (for testing)
-  const clearSharedGrid = () => {
-    setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
-    setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
+  const clearSharedGrid = async () => {
+    await setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
+    await setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
     setVideos(Array(16).fill(null));
     setUserContributions(new Set());
     console.log('Shared grid cleared');
