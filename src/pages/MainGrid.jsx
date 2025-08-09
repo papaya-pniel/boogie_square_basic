@@ -223,7 +223,7 @@ export default function MainGrid() {
                 className={`relative flex items-center justify-center rounded-none overflow-hidden border-2 ${getSlotStyle(idx)}`}
               >
                 {src ? (
-                  <video src={src} autoPlay muted loop playsInline className="w-full h-full object-cover" />
+                  <video key={`${idx}-${src}`} src={src} autoPlay muted loop playsInline className="w-full h-full object-cover" />
                 ) : (
                   <>
                     <video

@@ -52,6 +52,7 @@ export default function RecordPage() {
   const streamRef = useRef(null);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
+  const stopTimerRef = useRef(null);
 
   const tutorialVideoUrl = getTutorialSrc(step, idxNum);
 
@@ -60,12 +61,35 @@ export default function RecordPage() {
     return () => clearTimeout(timeout);
   }, [tutorialVideoUrl]);
 
+  const scheduleStopForTutorial = () => {
+    const tutorial = tutorialRef.current;
+    if (!tutorial) return;
+    const ensureTimer = () => {
+      const dur = Number.isFinite(tutorial.duration) && tutorial.duration > 0 ? tutorial.duration : 0;
+      if (dur > 0) {
+        stopTimerRef.current && clearTimeout(stopTimerRef.current);
+        stopTimerRef.current = setTimeout(() => {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+            mediaRecorderRef.current.stop();
+          }
+        }, Math.ceil(dur * 1000));
+      }
+    };
+    if (!Number.isFinite(tutorial.duration) || tutorial.duration === 0) {
+      const handler = () => { ensureTimer(); tutorial.removeEventListener('loadedmetadata', handler); };
+      tutorial.addEventListener('loadedmetadata', handler);
+    } else {
+      ensureTimer();
+    }
+  };
+
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, frameRate: 30 }, audio: { sampleRate: 48000 } });
     streamRef.current = stream;
     videoRef.current.srcObject = stream;
 
-    const recorder = new MediaRecorder(stream);
+    const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
+    const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 800_000, audioBitsPerSecond: 96_000 });
     mediaRecorderRef.current = recorder;
     chunksRef.current = [];
 
@@ -76,12 +100,22 @@ export default function RecordPage() {
       setPreviewUrl(url);
       setClips((prev) => [...prev, blob]);
       stream.getTracks().forEach((t) => t.stop());
+      stopTimerRef.current && clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+      // restore tutorial looping after a take
+      if (tutorialRef.current) tutorialRef.current.loop = true;
       setRecording(false);
     };
 
     recorder.start();
     setRecording(true);
-    if (tutorialRef.current) { tutorialRef.current.currentTime = 0; tutorialRef.current.play().catch(() => {}); }
+    // Play tutorial once for the take; stop recorder at tutorial end
+    if (tutorialRef.current) {
+      tutorialRef.current.loop = false;
+      tutorialRef.current.currentTime = 0;
+      tutorialRef.current.play().catch(() => {});
+      scheduleStopForTutorial();
+    }
   };
 
   const startCountdownThenRecord = () => {
@@ -131,6 +165,8 @@ export default function RecordPage() {
     if (clips.length > 0) setClips((prev) => prev.slice(0, -1));
     setPreviewUrl(null);
     setRecording(false);
+    stopTimerRef.current && clearTimeout(stopTimerRef.current);
+    stopTimerRef.current = null;
   };
 
   return (
@@ -144,8 +180,7 @@ export default function RecordPage() {
             <video
               ref={tutorialRef}
               src={tutorialVideoUrl}
-              muted autoPlay playsInline
-              onEnded={() => recording && mediaRecorderRef.current?.stop()}
+              muted autoPlay playsInline loop
               className="absolute top-4 right-4 w-40 h-28 rounded-none shadow border border-white z-10"
             />
             {countdown !== null && (
@@ -155,8 +190,8 @@ export default function RecordPage() {
             )}
           </div>
           <div className="flex gap-4 mt-4">
-            <button onClick={startCountdownThenRecord} className="px-4 py-2 bg-white text-black rounded" disabled={recording || countdown !== null}>Start Recording</button>
-            <button onClick={() => mediaRecorderRef.current?.stop()} className="px-4 py-2 bg-white text-black rounded" disabled={!recording}>Stop</button>
+            <Button onClick={startCountdownThenRecord} disabled={recording || countdown !== null}>Start Recording</Button>
+            <Button onClick={() => mediaRecorderRef.current?.stop()} disabled={!recording}>Stop</Button>
           </div>
         </>
       ) : (
@@ -170,10 +205,10 @@ export default function RecordPage() {
           {uploadError && <p className="text-red-400 mb-4">{uploadError}</p>}
           <video src={previewUrl} controls className="w-full max-w-xl rounded-none" />
           <div className="flex gap-4 mt-4">
-            <button onClick={handleNextOrSave} className="px-4 py-2 bg-white text-black rounded" disabled={isUploading}>
+            <Button onClick={handleNextOrSave} disabled={isUploading}>
               {step < 2 ? 'Use Take & Next Tutorial' : 'Merge 3 Takes & Save'}
-            </button>
-            <button onClick={handleReRecord} className="px-4 py-2 bg-gray-600 text-white rounded" disabled={isUploading}>Re-record this Take</button>
+            </Button>
+            <Button variant="secondary" onClick={handleReRecord} disabled={isUploading}>Re-record this Take</Button>
           </div>
         </>
       )}

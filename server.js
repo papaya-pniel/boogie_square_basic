@@ -45,6 +45,8 @@ app.post('/api/upload', express.raw({ type: 'video/webm', limit: '200mb' }), asy
 const upload = multer({ storage: multer.memoryStorage() });
 app.post('/api/concat', upload.array('clips', 3), async (req, res) => {
   try {
+    const count = (req.files && req.files.length) || 0;
+    console.log('concat received files:', count, count ? req.files.map((f,i)=>`${i}:${f.originalname||'clip'}.${(f.mimetype||'').split('/')[1]||''}(${f.size}B)`) : '');
     if (!req.files || req.files.length === 0) return res.status(400).json({ error: 'No clips' });
     const dir = tmpdir();
     const files = [];
