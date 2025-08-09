@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import { uploadData, downloadData, remove } from "aws-amplify/storage";
+import { uploadData, getUrl } from "aws-amplify/storage";
 import { getCurrentUser } from "@aws-amplify/auth";
 
 export const VideoContext = createContext();
@@ -11,6 +11,10 @@ export function VideoProvider({ children }) {
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
   const [userContributions, setUserContributions] = useState(new Set()); // Track which positions user has filled
+
+  // Single userEmail reference for the component
+  const userEmail = user?.username || user?.email || null;
+  const isProd = typeof window !== 'undefined' && !window.location.origin.includes('localhost');
 
   // Get current user on mount
   useEffect(() => {
@@ -94,8 +98,9 @@ export function VideoProvider({ children }) {
         
         // Update user contributions using email as persistent identifier
         const userContribs = new Set();
-        currentContribs.forEach(contrib => {
-          if (contrib.userEmail === userEmail || contrib.userId === user.userId) {
+        const safeContribs = Array.isArray(currentContribs) ? currentContribs : [];
+        safeContribs.forEach(contrib => {
+          if (contrib.userEmail === userEmail || contrib.userId === user?.userId) {
             userContribs.add(contrib.position);
           }
         });
@@ -199,7 +204,6 @@ export function VideoProvider({ children }) {
       console.log('Initializing shared grid for user:', user.userId);
       
       // Set a storage context identifier for debugging
-      const userEmail = user.username || user.email;
       localStorage.setItem('storage-context', `${userEmail}-${Date.now()}`);
       localStorage.setItem('current-user-email', userEmail);
       
@@ -244,26 +248,29 @@ export function VideoProvider({ children }) {
 
   const uploadVideoToS3 = async (index, videoUrl) => {
     try {
-      if (!currentGridId) {
-        throw new Error('Grid not initialized. Please refresh the page.');
-      }
+      if (!currentGridId) throw new Error('Grid not initialized. Please refresh the page.');
       const authenticatedUser = await ensureAuthenticated();
 
-      // Convert blob URL to ArrayBuffer
-      const blobResponse = await fetch(videoUrl);
-      const arrayBuffer = await blobResponse.arrayBuffer();
-
-      // Upload raw bytes to our local server to get a sharable URL
-      const uploadRes = await fetch('http://localhost:3001/api/upload', {
-        method: 'POST',
-        headers: { 'Content-Type': 'video/webm' },
-        body: new Uint8Array(arrayBuffer)
-      });
-      if (!uploadRes.ok) {
-        throw new Error('Upload failed');
+      if (!isProd) {
+        // DEV: upload to local server
+        const blobResponse = await fetch(videoUrl);
+        const arrayBuffer = await blobResponse.arrayBuffer();
+        const uploadRes = await fetch('http://localhost:3001/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'video/webm' },
+          body: new Uint8Array(arrayBuffer)
+        });
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        const { url } = await uploadRes.json();
+        return url; // sharable local URL
       }
-      const { url } = await uploadRes.json();
-      return url; // sharable URL served by the local server
+
+      // PROD: upload to S3 via Amplify Storage v6
+      const blobRes = await fetch(videoUrl);
+      const blob = await blobRes.blob();
+      const key = `videos/${currentGridId}_${index}_${authenticatedUser.userId}_${Date.now()}.webm`;
+      await uploadData({ key, data: blob, options: { contentType: 'video/webm' } });
+      return key; // store S3 key in prod
     } catch (error) {
       console.error('Error processing video:', error);
       throw error;
@@ -327,7 +334,7 @@ export function VideoProvider({ children }) {
       
       // Archive the completed grid
       const completedGrid = {
-        id: currentGridId,
+          id: currentGridId,
         videos: [...videos],
         contributions: await getSharedData(SHARED_CONTRIBUTIONS_KEY),
         completedAt: new Date().toISOString()
@@ -357,18 +364,18 @@ export function VideoProvider({ children }) {
   };
 
   // Add a function to get S3 video URL
-  const getS3VideoUrl = async (s3Key) => {
+  const getS3VideoUrl = async (value) => {
     try {
-      // If it's already a blob URL, return it directly
-      if (s3Key.startsWith('blob:')) {
-        return s3Key;
+      if (!value) return null;
+      // Direct URLs (dev local server or already public URLs)
+      if (typeof value === 'string' && (value.startsWith('blob:') || value.startsWith('http://') || value.startsWith('https://'))) {
+        // In prod, ignore localhost URLs (sanitize stale entries)
+        if (isProd && value.includes('localhost')) return null;
+        return value;
       }
-      
-      // Otherwise, try to download from S3 (for future use)
-      const result = await downloadData({
-        key: s3Key
-      });
-      return result.body;
+      // Prod: value is an S3 key → pre-signed URL
+      const { url } = await getUrl({ key: value });
+      return url.toString();
     } catch (error) {
       console.error('Error getting video URL:', error);
       return null;
@@ -391,17 +398,16 @@ export function VideoProvider({ children }) {
   };
 
   // Helper function to sync user data across browser contexts
-  const syncUserAcrossContexts = (targetUserEmail) => {
+  const syncUserAcrossContexts = async (targetUserEmail) => {
     try {
-      const allContributions = getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const allContributionsRaw = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const allContributions = Array.isArray(allContributionsRaw) ? allContributionsRaw : [];
       const userContribs = new Set();
-      
       allContributions.forEach(contrib => {
         if (contrib.userEmail === targetUserEmail) {
           userContribs.add(contrib.position);
         }
       });
-      
       setUserContributions(userContribs);
       console.log(`🔄 Synced user data for ${targetUserEmail}:`, Array.from(userContribs));
       return userContribs;
