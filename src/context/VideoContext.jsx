@@ -60,13 +60,15 @@ export function VideoProvider({ children }) {
       console.log('Received shared grid update:', key, data);
       
       if (key === SHARED_GRID_KEY) {
-        setVideos([...data]);
+        const safe = Array.isArray(data) ? data : Array(16).fill(null);
+        setVideos(safe);
       } else if (key === SHARED_CONTRIBUTIONS_KEY) {
         // Recalculate user contributions using email as persistent identifier
         if (user) {
           const userEmail = user.username || user.email;
           const userContribs = new Set();
-          data.forEach(contrib => {
+          const list = Array.isArray(data) ? data : [];
+          list.forEach(contrib => {
             if (contrib.userEmail === userEmail || contrib.userId === user.userId) {
               userContribs.add(contrib.position);
             }
@@ -89,18 +91,19 @@ export function VideoProvider({ children }) {
         const currentVideos = await getSharedData(SHARED_GRID_KEY);
         const currentContribs = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
         
+        const safeVideos = Array.isArray(currentVideos) ? currentVideos : Array(16).fill(null);
         // Check if videos have changed
-        const videosChanged = JSON.stringify(currentVideos) !== JSON.stringify(videos);
+        const videosChanged = JSON.stringify(safeVideos) !== JSON.stringify(videos);
         if (videosChanged) {
           console.log('Detected external video changes, syncing...');
-          setVideos([...currentVideos]);
+          setVideos(safeVideos);
         }
         
-        // Update user contributions using email as persistent identifier
+        // Update user contributions
         const userContribs = new Set();
-        const safeContribs = Array.isArray(currentContribs) ? currentContribs : [];
-        safeContribs.forEach(contrib => {
-          if (contrib.userEmail === userEmail || contrib.userId === user?.userId) {
+        const list = Array.isArray(currentContribs) ? currentContribs : [];
+        list.forEach(contrib => {
+          if (contrib.userEmail === userEmail || contrib.userId === user.userId) {
             userContribs.add(contrib.position);
           }
         });
@@ -115,7 +118,7 @@ export function VideoProvider({ children }) {
       } catch (error) {
         console.error('Error during periodic sync:', error);
       }
-    }, 3000); // Check every 3 seconds
+    }, 3000);
 
     return () => clearInterval(syncInterval);
   }, [user, videos, userContributions]);
@@ -250,6 +253,11 @@ export function VideoProvider({ children }) {
     try {
       if (!currentGridId) throw new Error('Grid not initialized. Please refresh the page.');
       const authenticatedUser = await ensureAuthenticated();
+
+      // If we already have a hosted URL (e.g., from /api/concat), don't re-upload
+      if (typeof videoUrl === 'string' && (videoUrl.startsWith('http://') || videoUrl.startsWith('https://'))) {
+        return videoUrl;
+      }
 
       if (!isProd) {
         // DEV: upload to local server

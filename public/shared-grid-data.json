@@ -1,11 +1,5 @@
 {
   "videos": [
-    "http://localhost:3001/uploads/video_1754744906614.webm",
-    "http://localhost:3001/uploads/video_1754745246890.webm",
-    "http://localhost:3001/uploads/video_1754745562187.webm",
-    "videos/shared-grid-1_3_b622d234-40d1-70cc-01a3-14e9d141bde9_1754748881642.webm",
-    "videos/shared-grid-1_4_b622d234-40d1-70cc-01a3-14e9d141bde9_1754751440268.webm",
-    "http://localhost:3001/uploads/video_1754748680414.webm",
     null,
     null,
     null,
@@ -13,11 +7,26 @@
     null,
     null,
     null,
-    "videos/shared-grid-1_13_1632d274-a0b1-70c8-f035-79795b4e3f9f_1754751785706.webm",
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
     null,
     null
   ],
-  "contributions": {},
-  "lastUpdated": "2025-08-09T15:03:05.712Z",
-  "gridId": "shared-grid-1"
+  "contributions": [
+    {
+      "position": 3,
+      "userId": "86a23264-20a1-703f-b5bf-51c4399b5372",
+      "userEmail": "86a23264-20a1-703f-b5bf-51c4399b5372",
+      "username": "86a23264-20a1-703f-b5bf-51c4399b5372",
+      "timestamp": "2025-08-09T18:37:30.793Z"
+    }
+  ],
+  "lastUpdated": "2025-08-09T18:37:30.796Z",
+  "gridId": "shared-grid-1",
+  "totalContributions": 1
 }

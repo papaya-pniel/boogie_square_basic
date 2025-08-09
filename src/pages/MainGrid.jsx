@@ -146,6 +146,14 @@ export default function MainGrid() {
     }
   };
 
+  // Optional helper reused from RecordPage for preview (step 0)
+  const getTutorialSrc = (step, index) => {
+    const folders = ["/tutorial_1/", "/tutorial_2/", "/tutorial_3/"];
+    const folder = folders[Math.max(0, Math.min(step, folders.length - 1))];
+    const n = index + 1;
+    return folder + encodeURIComponent(`Pattern-${step + 1}_${n}.mp4`);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-black text-white">
@@ -223,7 +231,7 @@ export default function MainGrid() {
                 ) : (
                   <>
                     <video
-                      src="/boogie_square_tutorial.mp4"
+                      src={getTutorialSrc(0, idx)}
                       autoPlay
                       muted
                       loop
