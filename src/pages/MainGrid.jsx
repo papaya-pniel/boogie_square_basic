@@ -122,12 +122,8 @@ export default function MainGrid() {
   }, [paddedVideos]);
 
   const handleSlotClick = (index) => {
-    // Check if user can contribute to this position
-    if (!canContributeToPosition(index)) {
-      alert('This position is already filled by another user.');
-      return;
-    }
-    navigate(`/train/${index}`);
+    if (!canContributeToPosition(index)) return;
+    navigate(`/record/${index}`);
   };
 
   const getSlotStyle = (index) => {

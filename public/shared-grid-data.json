@@ -2,7 +2,7 @@
   "videos": [
     null,
     null,
-    null,
+    "http://localhost:3001/uploads/video_1754766278489.webm?t=1754766284514",
     null,
     null,
     null,
@@ -19,14 +19,14 @@
   ],
   "contributions": [
     {
-      "position": 3,
+      "position": 2,
       "userId": "86a23264-20a1-703f-b5bf-51c4399b5372",
       "userEmail": "86a23264-20a1-703f-b5bf-51c4399b5372",
       "username": "86a23264-20a1-703f-b5bf-51c4399b5372",
-      "timestamp": "2025-08-09T18:37:30.793Z"
+      "timestamp": "2025-08-09T19:04:44.539Z"
     }
   ],
-  "lastUpdated": "2025-08-09T18:37:30.796Z",
+  "lastUpdated": "2025-08-09T19:04:44.543Z",
   "gridId": "shared-grid-1",
   "totalContributions": 1
 }

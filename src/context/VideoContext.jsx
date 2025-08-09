@@ -305,9 +305,14 @@ export function VideoProvider({ children }) {
       // Upload (local server in dev, S3 in prod)
       const storedValue = await uploadVideoToS3(index, videoUrl);
 
+      // Cache-bust if it is an http(s) URL
+      const mergedSaved = (typeof storedValue === 'string' && (storedValue.startsWith('http://') || storedValue.startsWith('https://')))
+        ? storedValue + (storedValue.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`)
+        : storedValue;
+
       // Update shared state
       const updatedVideos = [...videos];
-      updatedVideos[index] = storedValue;
+      updatedVideos[index] = mergedSaved;
       setVideos(updatedVideos);
 
       // Save to shared storage
@@ -329,6 +334,17 @@ export function VideoProvider({ children }) {
         timestamp: new Date().toISOString(),
       });
       await setSharedData(SHARED_CONTRIBUTIONS_KEY, filtered);
+
+      // Also persist to server immediately (prevents periodic sync overwrite)
+      try {
+        await fetch('http://localhost:3001/api/shared-grid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videos: updatedVideos, contributions: filtered }),
+        });
+      } catch (e) {
+        console.warn('Failed to persist shared grid immediately:', e);
+      }
 
       // Check if grid is complete
       if (updatedVideos.every(v => v !== null)) {
@@ -382,9 +398,9 @@ export function VideoProvider({ children }) {
       if (!value) return null;
       // Direct URLs (dev local server or already public URLs)
       if (typeof value === 'string' && (value.startsWith('blob:') || value.startsWith('http://') || value.startsWith('https://'))) {
-        // In prod, ignore localhost URLs (sanitize stale entries)
         if (isProd && value.includes('localhost')) return null;
-        return value;
+        const bust = `t=${Date.now()}`;
+        return value + (value.includes('?') ? `&${bust}` : `?${bust}`);
       }
       // Prod: value is an S3 key → pre-signed URL
       const { url } = await getUrl({ key: value });
