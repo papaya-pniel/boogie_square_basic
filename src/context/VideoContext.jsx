@@ -345,7 +345,7 @@ export function VideoProvider({ children }) {
       } catch (e) {
         console.warn('Failed to persist shared grid immediately:', e);
       }
-
+      
       // Check if grid is complete
       if (updatedVideos.every(v => v !== null)) {
         await handleGridCompletion();
@@ -359,33 +359,36 @@ export function VideoProvider({ children }) {
 
   const handleGridCompletion = async () => {
     try {
-      console.log('Grid completed with 16 videos! Creating new grid...');
-      
-      // Archive the completed grid
-      const completedGrid = {
-          id: currentGridId,
-        videos: [...videos],
-        contributions: await getSharedData(SHARED_CONTRIBUTIONS_KEY),
-        completedAt: new Date().toISOString()
-      };
-      
-      // Save completed grid to history
-      const gridHistory = JSON.parse(localStorage.getItem('completed-grids') || '[]');
-      gridHistory.push(completedGrid);
-      localStorage.setItem('completed-grids', JSON.stringify(gridHistory));
-      
-      // Reset shared storage for new grid
-      await setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
-      await setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
-      
-      // Reset local state
+      console.log('Grid completed with 16 videos! Creating final mosaic...');
+
+      // Build recipients from shared contributions
+      const sharedContribs = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const emails = Array.isArray(sharedContribs)
+        ? [...new Set(sharedContribs.map(c => c.userEmail).filter(Boolean))]
+        : [];
+
+      // Persist current videos
+      const safeVideos = Array.isArray(videos) ? videos : Array(16).fill(null);
+
+      // Kick off finalize (server will generate the 4x4 mosaic and email)
+      try {
+        await fetch('http://localhost:3001/api/finalize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videos: safeVideos, recipients: emails }),
+        });
+      } catch (e) {
+        console.warn('Finalize request failed (continuing to next grid):', e);
+      }
+
+      // Reset for new grid
       setVideos(Array(16).fill(null));
       setUserContributions(new Set());
-      
-      // Update grid ID
+      await setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
+      await setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
+
       const newGridId = `shared-grid-${Date.now()}`;
       setCurrentGridId(newGridId);
-      
       console.log('New grid created:', newGridId);
     } catch (error) {
       console.error('Error handling grid completion:', error);
