@@ -280,43 +280,48 @@ export function VideoProvider({ children }) {
   const updateVideoAtIndex = async (index, videoUrl) => {
     try {
       console.log('updateVideoAtIndex called with index:', index, 'currentGridId:', currentGridId);
-      
-      // Check if user has already contributed to the grid
-      if (userContributions.size > 0) {
+
+      const ownedIndex = getUserOwnedIndex();
+      const isUpdatingOwnSlot = ownedIndex === index || userContributions.has(index);
+
+      // Enforce one-square-per-user, but allow re-recording your own slot
+      if (ownedIndex !== null && !isUpdatingOwnSlot) {
         throw new Error('You can only upload to one square per grid');
       }
 
-      // Check if position is already taken
-      if (videos[index] !== null) {
+      // Prevent overwriting someone else’s slot
+      if (videos[index] !== null && !isUpdatingOwnSlot) {
         throw new Error('This position is already filled by another user');
       }
 
-      // Upload video to S3 first
-      const s3Key = await uploadVideoToS3(index, videoUrl);
-      
+      // Upload (local server in dev, S3 in prod)
+      const storedValue = await uploadVideoToS3(index, videoUrl);
+
       // Update shared state
       const updatedVideos = [...videos];
-      updatedVideos[index] = s3Key;
+      updatedVideos[index] = storedValue;
       setVideos(updatedVideos);
-      
+
       // Save to shared storage
       await setSharedData(SHARED_GRID_KEY, updatedVideos);
-      
+
+      // Track user's contribution (replace existing record for this user)
       const updatedContributions = new Set(userContributions);
       updatedContributions.add(index);
       setUserContributions(updatedContributions);
-      
-      // Save contributions to shared storage using email as persistent identifier
-      const allContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
-      allContributions.push({ 
-        position: index, 
-        userId: user.userId, // Keep for backward compatibility
-        userEmail: userEmail, // Primary identifier for persistence
+
+      const allContributionsRaw = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const allContributions = Array.isArray(allContributionsRaw) ? allContributionsRaw : [];
+      const filtered = allContributions.filter(c => c.userEmail !== userEmail);
+      filtered.push({
+        position: index,
+        userId: user.userId,
+        userEmail: userEmail,
         username: user.username || user.email,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       });
-      await setSharedData(SHARED_CONTRIBUTIONS_KEY, allContributions);
-      
+      await setSharedData(SHARED_CONTRIBUTIONS_KEY, filtered);
+
       // Check if grid is complete
       if (updatedVideos.every(v => v !== null)) {
         await handleGridCompletion();
@@ -382,10 +387,24 @@ export function VideoProvider({ children }) {
     }
   };
 
+  // Find the index already owned by current user by inspecting stored values (S3 key contains userId)
+  const getUserOwnedIndex = () => {
+    if (!user || !user.userId) return null;
+    for (let i = 0; i < videos.length; i += 1) {
+      const value = videos[i];
+      if (typeof value === 'string' && value.includes(user.userId)) {
+        return i;
+      }
+    }
+    return null;
+  };
+
   // Check if user can contribute to a position
   const canContributeToPosition = (index) => {
-    // User can only contribute to one square: position must be empty AND user hasn't contributed yet
-    return videos[index] === null && userContributions.size === 0;
+    // User can contribute to any empty slot OR re-record their own slot
+    const ownedIndex = getUserOwnedIndex();
+    const isOwnSlot = ownedIndex === index || userContributions.has(index);
+    return isOwnSlot || (videos[index] === null && ownedIndex === null);
   };
 
   // Helper function to clear shared grid (for testing)
