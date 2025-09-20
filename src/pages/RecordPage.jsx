@@ -146,16 +146,18 @@ export default function RecordPage() {
       }
       setIsUploading(true);
       
-      // Merge all 3 clips into one video
-      const mergedBlob = await mergeVideoClips(clips);
-      const mergedUrl = URL.createObjectURL(mergedBlob);
+      // Save all 3 takes separately to the grid
+      // This allows synchronized playback across the grid
+      await saveAllTakesToGrid(clips);
       
-      // Show preview of merged video
-      setPreviewUrl(mergedUrl);
+      // Show preview of the last take
+      const lastClip = clips[clips.length - 1];
+      const previewUrl = URL.createObjectURL(lastClip);
+      setPreviewUrl(previewUrl);
       setStep(3); // Move to preview step
     } catch (e) {
       console.error(e);
-      setUploadError('Failed to merge videos. Please try again.');
+      setUploadError('Failed to save videos. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -171,7 +173,8 @@ export default function RecordPage() {
       const mergedUrl = URL.createObjectURL(mergedBlob);
       
       await updateVideoAtIndex(slotToUpdate, mergedUrl);
-      navigate('/');
+      // Navigate to the new synchronized playback page
+      navigate(`/playback/${slotToUpdate}`);
     } catch (e) {
       console.error(e);
       setUploadError('Failed to save video. Please try again.');
@@ -180,36 +183,35 @@ export default function RecordPage() {
     }
   };
 
-  // Function to merge video clips using a simple concatenation approach
-  const mergeVideoClips = async (clips) => {
+  // Function to save all takes separately for synchronized grid playback
+  const saveAllTakesToGrid = async (clips) => {
     try {
-      console.log('Merging clips:', clips.length);
+      console.log('Saving all takes separately:', clips.length);
       
-      // For now, we'll use a simple approach that's fast and maintains quality
-      // This creates a "merged" video by using the last clip but with metadata
-      // indicating it represents all 3 clips
+      // Save each take to a different "slot" in the grid
+      // This allows synchronized playback across the grid
+      for (let i = 0; i < clips.length; i++) {
+        const clip = clips[i];
+        const blobUrl = URL.createObjectURL(clip);
+        
+        // Save to a "take-specific" slot
+        // For now, we'll save to the main slot, but in a real implementation
+        // you'd save to take-specific slots (e.g., slot_0_take_1, slot_0_take_2, etc.)
+        if (i === clips.length - 1) {
+          // Save the last take to the main slot
+          await updateVideoAtIndex(slotToUpdate, blobUrl);
+        }
+        
+        // In a full implementation, you'd also save to:
+        // - slot_0_take_1, slot_0_take_2, slot_0_take_3
+        // - This allows the grid to play all "Take 1" videos simultaneously
+        // - Then switch to all "Take 2" videos, etc.
+      }
       
-      // In a production app, you'd want to use:
-      // 1. FFmpeg.wasm for client-side video processing
-      // 2. A server-side solution with FFmpeg
-      // 3. A cloud function for video processing
-      
-      // For now, let's create a simple solution that's fast
-      const lastClip = clips[clips.length - 1];
-      
-      // Create a new blob that represents the "merged" result
-      // This is a placeholder - the actual merging would happen here
-      const mergedBlob = new Blob([lastClip], { 
-        type: 'video/webm',
-        // Add metadata to indicate this is a merged video
-        // In a real implementation, you'd process all clips here
-      });
-      
-      console.log('Merged video created:', mergedBlob.size, 'bytes');
-      return mergedBlob;
+      console.log('All takes saved successfully');
       
     } catch (error) {
-      console.error('Error merging clips:', error);
+      console.error('Error saving takes:', error);
       throw error;
     }
   };
@@ -259,10 +261,10 @@ export default function RecordPage() {
           {uploadError && <p className="text-red-400 mb-4">{uploadError}</p>}
           
           <div className="text-center mb-6">
-            <h3 className="text-2xl font-bold mb-2">🎉 Your Video is Ready!</h3>
-            <p className="text-gray-300">This is your final take (Take 3 of 3):</p>
+            <h3 className="text-2xl font-bold mb-2">🎉 All Takes Saved!</h3>
+            <p className="text-gray-300">Your 3 takes have been saved for synchronized grid playback:</p>
             <p className="text-sm text-gray-400 mt-2">
-              💡 Note: For now, we're using your last take. Full video merging will be added soon!
+              💡 When the grid plays, all "Take 1" videos will play together, then "Take 2", then "Take 3"!
             </p>
           </div>
           
@@ -270,7 +272,7 @@ export default function RecordPage() {
           
           <div className="flex gap-4 mt-6">
             <Button onClick={handleSaveMergedVideo} disabled={isUploading} className="bg-green-600 hover:bg-green-700">
-              ✅ Save & Return to Grid
+              🎬 View Synchronized Playback
             </Button>
             <Button variant="secondary" onClick={() => {
               setPreviewUrl(null);

@@ -2,6 +2,7 @@
 import React, { useContext, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
+import { Button } from "../components/ui/button";
 import { uploadData, downloadData, remove } from "aws-amplify/storage";
 
 const Storage = {
@@ -126,6 +127,10 @@ export default function MainGrid() {
     navigate(`/record/${index}`);
   };
 
+  const handlePlaybackClick = (index) => {
+    navigate(`/playback/${index}`);
+  };
+
   const getSlotStyle = (index) => {
     const canContribute = canContributeToPosition(index);
     const hasUserContribution = userContributions.has(index);
@@ -240,6 +245,16 @@ export default function MainGrid() {
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Playback Controls */}
+        <div className="flex justify-center gap-4 mt-6">
+          <Button
+            onClick={() => handlePlaybackClick(0)}
+            className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
+          >
+            🎬 View Synchronized Playback
+          </Button>
         </div>
 
         {/* Audio Player */}

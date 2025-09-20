@@ -6,6 +6,7 @@ import "@aws-amplify/ui-react/styles.css";
 import MainGrid from "../pages/MainGrid.jsx";
 import TrainPage from "../pages/TrainPage.jsx";
 import RecordPage from "../pages/RecordPage.jsx";
+import GridPlaybackPage from "../pages/GridPlaybackPage.jsx";
 
 export default function AppRouter() {
   return (
@@ -16,6 +17,7 @@ export default function AppRouter() {
             <Route path="/" element={<MainGrid user={user} signOut={signOut} />} />
             <Route path="/train/:index" element={<TrainPage user={user} />} />
             <Route path="/record/:index" element={<RecordPage user={user} />} />
+            <Route path="/playback/:index" element={<GridPlaybackPage user={user} />} />
           </Routes>
         </BrowserRouter>
       )}
