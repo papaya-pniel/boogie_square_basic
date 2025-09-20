@@ -23,6 +23,7 @@ export default function MainGrid() {
     getS3VideoUrl, 
     canContributeToPosition, 
     userContributions,
+    clearSharedGrid,
     user 
   } = useContext(VideoContext);
   const [selectedSong, setSelectedSong] = useState("none.mp3");
@@ -180,6 +181,13 @@ export default function MainGrid() {
         <h1 className="text-4xl font-bold text-center">Boogie Square</h1>
         <p className="text-gray-200 text-center">Collaborative Dance Grid - Choose an available square to contribute!</p>
         
+        {/* Testing Mode Notice */}
+        <div className="bg-yellow-500/20 border border-yellow-400 rounded-lg p-3 mb-4">
+          <p className="text-yellow-200 text-sm text-center">
+            🧪 <strong>Testing Mode:</strong> You can record videos for multiple squares to test the synchronized playback!
+          </p>
+        </div>
+        
         {/* User Info */}
         {user && (
           <div className="text-sm text-gray-200 mb-2">
@@ -254,6 +262,17 @@ export default function MainGrid() {
             className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
           >
             🎬 View Synchronized Playback
+          </Button>
+          <Button
+            onClick={async () => {
+              if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
+                await clearSharedGrid();
+                window.location.reload();
+              }
+            }}
+            className="bg-red-600 hover:bg-red-700 px-6 py-3"
+          >
+            🗑️ Clear Grid (Testing)
           </Button>
         </div>
 

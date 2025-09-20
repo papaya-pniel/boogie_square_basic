@@ -292,15 +292,18 @@ export function VideoProvider({ children }) {
       const ownedIndex = getUserOwnedIndex();
       const isUpdatingOwnSlot = ownedIndex === index || userContributions.has(index);
 
+      // TESTING MODE: Allow multiple squares per user for easy testing
+      // Comment out the restrictions below for production use
+      
       // Enforce one-square-per-user, but allow re-recording your own slot
-      if (ownedIndex !== null && !isUpdatingOwnSlot) {
-        throw new Error('You can only upload to one square per grid');
-      }
+      // if (ownedIndex !== null && !isUpdatingOwnSlot) {
+      //   throw new Error('You can only upload to one square per grid');
+      // }
 
-      // Prevent overwriting someone else’s slot
-      if (videos[index] !== null && !isUpdatingOwnSlot) {
-        throw new Error('This position is already filled by another user');
-      }
+      // Prevent overwriting someone else's slot
+      // if (videos[index] !== null && !isUpdatingOwnSlot) {
+      //   throw new Error('This position is already filled by another user');
+      // }
 
       // Upload (local server in dev, S3 in prod)
       const storedValue = await uploadVideoToS3(index, videoUrl);
@@ -428,10 +431,14 @@ export function VideoProvider({ children }) {
 
   // Check if user can contribute to a position
   const canContributeToPosition = (index) => {
-    // User can contribute to any empty slot OR re-record their own slot
-    const ownedIndex = getUserOwnedIndex();
-    const isOwnSlot = ownedIndex === index || userContributions.has(index);
-    return isOwnSlot || (videos[index] === null && ownedIndex === null);
+    // TESTING MODE: Allow user to contribute to any slot for easy testing
+    // In production, you'd want to restrict this to one slot per user
+    return true; // Allow all slots for testing
+    
+    // Production code (commented out for testing):
+    // const ownedIndex = getUserOwnedIndex();
+    // const isOwnSlot = ownedIndex === index || userContributions.has(index);
+    // return isOwnSlot || (videos[index] === null && ownedIndex === null);
   };
 
   // Helper function to clear shared grid (for testing)
