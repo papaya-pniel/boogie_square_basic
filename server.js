@@ -229,12 +229,28 @@ app.post('/api/finalize', express.json({ limit: '1mb' }), async (req, res) => {
         auth: process.env.SMTP_USER ? { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS } : undefined,
       });
       const unique = [...new Set(recipients.filter(Boolean))];
+
+      // Attach MP4 if not too large
+      let attachments = [];
+      try {
+        const stat = await fs.stat(outPath);
+        const maxBytes = Number(process.env.EMAIL_ATTACH_MAX_MB || 20) * 1024 * 1024; // default 20MB
+        if (stat.size <= maxBytes) {
+          attachments = [{ filename: outName, path: outPath, contentType: 'video/mp4' }];
+        } else {
+          console.warn(`Final video too large to attach (${stat.size} bytes). Sending link only.`);
+        }
+      } catch (e) {
+        console.warn('Could not stat final video for attachment:', e?.message || e);
+      }
+
       await transport.sendMail({
         from: process.env.FROM_EMAIL || 'no-reply@example.com',
         to: unique.join(','),
         subject: 'Your Boogie Square Final Video',
         text: `Thanks for contributing! Download the final video here: ${finalUrl}`,
-        html: `<p>Thanks for contributing! Download the final video here:</p><p><a href="${finalUrl}">${finalUrl}</a></p>`
+        html: `<p>Thanks for contributing! Download the final video here:</p><p><a href="${finalUrl}">${finalUrl}</a></p>`,
+        attachments,
       });
     }
 
