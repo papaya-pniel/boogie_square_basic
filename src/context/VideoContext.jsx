@@ -216,24 +216,91 @@ export function VideoProvider({ children }) {
 
   const uploadVideoToS3 = async (index, videoUrl) => {
     try {
+      console.log('uploadVideoToS3 called with:', { index, videoUrl, currentGridId });
+      
       if (!currentGridId) throw new Error('Grid not initialized. Please refresh the page.');
       const authenticatedUser = await ensureAuthenticated();
+      console.log('Authenticated user:', authenticatedUser.userId);
+
+      // Test Amplify configuration
+      try {
+        console.log('Testing Amplify configuration...');
+        // This will fail if Amplify isn't configured properly
+        const testKey = 'test/connection-test.txt';
+        await uploadData({ 
+          key: testKey, 
+          data: new Blob(['test'], { type: 'text/plain' }),
+          options: { level: 'private' }
+        });
+        console.log('Amplify configuration test passed');
+      } catch (configError) {
+        console.error('Amplify configuration test failed:', configError);
+        throw new Error('Amplify not configured properly. Please check amplify_outputs.json');
+      }
 
       // If we already have a hosted URL (e.g., from /api/concat), don't re-upload
       if (typeof videoUrl === 'string' && (videoUrl.startsWith('http://') || videoUrl.startsWith('https://'))) {
+        console.log('Video URL is already hosted, returning as-is');
         return videoUrl;
       }
 
-      // Always use S3 (skip localhost server)
-      // DEV: upload to S3 via Amplify Storage v6
-      const blobRes = await fetch(videoUrl);
-      const blob = await blobRes.blob();
-      const key = `videos/${currentGridId}_${index}_${authenticatedUser.userId}_${Date.now()}.webm`;
-      await uploadData({ key, data: blob, options: { contentType: 'video/webm' } });
-      return key; // store S3 key in prod
+      // Handle blob URLs
+      if (typeof videoUrl === 'string' && videoUrl.startsWith('blob:')) {
+        console.log('Processing blob URL:', videoUrl);
+        const blobRes = await fetch(videoUrl);
+        const blob = await blobRes.blob();
+        console.log('Blob created:', blob.size, 'bytes');
+        
+        const key = `videos/${currentGridId}_${index}_${authenticatedUser.userId}_${Date.now()}.webm`;
+        console.log('Uploading to S3 with key:', key);
+        
+        await uploadData({ 
+          key, 
+          data: blob, 
+          options: { 
+            contentType: 'video/webm',
+            level: 'private'
+          } 
+        });
+        
+        console.log('Successfully uploaded to S3:', key);
+        return key;
+      }
+
+      // Handle direct blob objects
+      if (videoUrl instanceof Blob) {
+        console.log('Processing blob object:', videoUrl.size, 'bytes');
+        const key = `videos/${currentGridId}_${index}_${authenticatedUser.userId}_${Date.now()}.webm`;
+        console.log('Uploading blob to S3 with key:', key);
+        
+        await uploadData({ 
+          key, 
+          data: videoUrl, 
+          options: { 
+            contentType: 'video/webm',
+            level: 'private'
+          } 
+        });
+        
+        console.log('Successfully uploaded blob to S3:', key);
+        return key;
+      }
+
+      throw new Error('Unsupported video URL type: ' + typeof videoUrl);
+      
     } catch (error) {
       console.error('Error processing video:', error);
-      throw error;
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        videoUrl: videoUrl,
+        index: index,
+        currentGridId: currentGridId
+      });
+      
+      // Fallback: return the original videoUrl if S3 upload fails
+      console.warn('S3 upload failed, using original videoUrl as fallback');
+      return videoUrl;
     }
   };
 
