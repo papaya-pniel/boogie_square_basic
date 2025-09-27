@@ -56,6 +56,18 @@ export default function GridPlaybackPage() {
       playAllVideos();
     }
   }, [isLoading, videoUrls]);
+
+  // Auto-advance takes every 5 seconds
+  useEffect(() => {
+    if (isLooping) {
+      const interval = setInterval(() => {
+        const nextTake = currentTake === 3 ? 1 : currentTake + 1;
+        setCurrentTake(nextTake);
+      }, 5000); // Switch takes every 5 seconds
+      
+      return () => clearInterval(interval);
+    }
+  }, [isLooping, currentTake]);
   
   const loadAllVideoUrls = async () => {
     setIsLoading(true);
@@ -156,22 +168,8 @@ export default function GridPlaybackPage() {
   
   
   const handleVideoEnded = (index) => {
-    // Check if all videos have ended
-    const allEnded = videoRefs.current.every((video, i) => {
-      if (!video || !videoUrls[i]) return true;
-      return video.ended;
-    });
-    
-    if (allEnded) {
-      if (isLooping) {
-        // Auto-advance to next take
-        const nextTake = currentTake === 3 ? 1 : currentTake + 1;
-        setCurrentTake(nextTake);
-        // Videos will auto-play when take changes
-      } else {
-        setIsPlaying(false);
-      }
-    }
+    // Videos loop automatically, no need to handle ended events
+    // Take switching is handled by the interval timer
   };
   
   if (isLoading) {
