@@ -181,118 +181,73 @@ export default function MainGrid() {
   }
 
   return (
-    <div
-      className="relative min-h-screen text-white overflow-hidden"
-      style={{ background: "linear-gradient(to top, #4466ff, #66bbff)" }}
-    >
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-2 gap-2">
-        <h1 className="text-4xl font-bold text-center">Boogie Square</h1>
-        <p className="text-gray-200 text-center">Collaborative Dance Grid - Choose an available square to contribute!</p>
-        
-        {/* Testing Mode Notice */}
-        <div className="bg-yellow-500/20 border border-yellow-400 rounded-lg p-3 mb-4">
-          <p className="text-yellow-200 text-sm text-center">
-            🧪 <strong>Testing Mode:</strong> You can record videos for multiple squares to test the synchronized playback!
-          </p>
-        </div>
-        
-        {/* User Info */}
-        {user && (
-          <div className="text-sm text-gray-200 mb-2">
-            Welcome, {user.username || user.email}! 
-            {userContributions.size === 0 
-              ? "Choose one empty square to record your dance." 
-              : "You've already contributed to this grid!"}
-          </div>
-        )}
-
-        {/* Legend */}
-        <div className="flex gap-4 text-xs mb-4">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-yellow-400 rounded"></div>
-            <span>Available</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-green-400 rounded"></div>
-            <span>Your slot</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-blue-400 rounded"></div>
-            <span>Other users</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 bg-gray-400 rounded"></div>
-            <span>Unavailable</span>
-          </div>
-        </div>
-
-        {/* Grid */}
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-xl">
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
+      <h1 className="text-4xl font-bold mb-8">Boogie Square</h1>
+      
+      {/* Grid */}
+      <div 
+        className="grid gap-0 border border-gray-300"
+        style={{
+          gridTemplateColumns: `repeat(4, 1fr)`,
+          gridTemplateRows: `repeat(4, 1fr)`,
+          width: "400px",
+          height: "400px"
+        }}
+      >
+        {paddedVideos.map((src, idx) => (
           <div
-            className="grid gap-0"
-            style={{
-              gridTemplateColumns: `repeat(4, 1fr)`,
-              gridTemplateRows: `repeat(4, 1fr)`,
-              width: "min(70vw, 70vh)",
-              height: "min(70vw, 70vh)"
-            }}
+            key={idx}
+            onClick={() => handleSlotClick(idx)}
+            className="relative flex items-center justify-center bg-black border border-gray-300 cursor-pointer hover:bg-gray-900"
           >
-            {paddedVideos.map((src, idx) => (
-              <div
-                key={idx}
-                onClick={() => handleSlotClick(idx)}
-                className={`relative flex items-center justify-center rounded-none overflow-hidden border-2 ${getSlotStyle(idx)}`}
-              >
-                {src ? (
-                  // Show lock icon for recorded slots instead of video
-                  <div className="flex flex-col items-center justify-center w-full h-full">
-                    <div className="text-6xl mb-2">🔒</div>
-                    <div className="text-sm text-white/80 font-bold">RECORDED</div>
-                  </div>
-                ) : (
-                  <>
-                    <video
-                      src={getTutorialSrc(0, idx)}
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      className="absolute inset-0 w-full h-full object-cover opacity-40 z-0"
-                    />
-                    <span className="text-4xl text-white/40 font-bold z-10 relative">+</span>
-                  </>
-                )}
-              </div>
-            ))}
+            {src ? (
+              // Show lock icon for recorded slots
+              <div className="text-6xl text-cyan-400">🔒</div>
+            ) : (
+              // Show plus icon for empty slots
+              <div className="text-6xl text-cyan-400">+</div>
+            )}
           </div>
-        </div>
-
-        {/* Playback Controls */}
-        <div className="flex justify-center gap-4 mt-6">
-          <Button
-            onClick={() => handlePlaybackClick(0)}
-            className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
-          >
-            🎬 View Synchronized Playback
-          </Button>
-          <Button
-            onClick={async () => {
-              if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
-                await clearSharedGrid();
-                window.location.reload();
-              }
-            }}
-            className="bg-red-600 hover:bg-red-700 px-6 py-3"
-          >
-            🗑️ Clear Grid (Testing)
-          </Button>
-        </div>
-
-        {/* Audio Player */}
-        <audio ref={audioRef} autoPlay loop className="hidden">
-          <source src={`/music/${selectedSong}`} type="audio/mp3" />
-        </audio>
+        ))}
       </div>
+
+      {/* Legend */}
+      <div className="flex gap-8 mt-8">
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-4 h-4 bg-green-500"></div>
+          <span className="text-white text-sm">SHARE</span>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-4 h-4 bg-pink-500"></div>
+          <span className="text-white text-sm">LOCK</span>
+        </div>
+      </div>
+
+      {/* Playback Controls */}
+      <div className="flex justify-center gap-4 mt-8">
+        <Button
+          onClick={() => handlePlaybackClick(0)}
+          className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
+        >
+          🎬 View Synchronized Playback
+        </Button>
+        <Button
+          onClick={async () => {
+            if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
+              await clearSharedGrid();
+              window.location.reload();
+            }
+          }}
+          className="bg-red-600 hover:bg-red-700 px-6 py-3"
+        >
+          🗑️ Clear Grid (Testing)
+        </Button>
+      </div>
+
+      {/* Audio Player */}
+      <audio ref={audioRef} autoPlay loop className="hidden">
+        <source src={`/music/${selectedSong}`} type="audio/mp3" />
+      </audio>
     </div>
   );
 }

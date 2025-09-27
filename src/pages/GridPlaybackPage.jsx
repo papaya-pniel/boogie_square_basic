@@ -190,60 +190,62 @@ export default function GridPlaybackPage() {
   }
   
   return (
-    <div
-      className="relative min-h-screen text-white overflow-hidden"
-      style={{ background: "linear-gradient(to top, #4466ff, #66bbff)" }}
-    >
-      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-2 gap-2">
-        <h1 className="text-4xl font-bold text-center">🎬 Synchronized Grid Playback</h1>
-        <p className="text-gray-200 text-center">Watch all takes play together in perfect synchronization!</p>
-        
-        {/* Grid */}
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-xl">
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
+      <h1 className="text-4xl font-bold mb-8">🎬 Synchronized Grid Playback</h1>
+      
+      {/* Grid */}
+      <div 
+        className="grid gap-0 border border-gray-300"
+        style={{
+          gridTemplateColumns: `repeat(4, 1fr)`,
+          gridTemplateRows: `repeat(4, 1fr)`,
+          width: "400px",
+          height: "400px"
+        }}
+      >
+        {videoUrls.map((url, idx) => (
           <div
-            className="grid gap-0"
-            style={{
-              gridTemplateColumns: `repeat(4, 1fr)`,
-              gridTemplateRows: `repeat(4, 1fr)`,
-              width: "min(70vw, 70vh)",
-              height: "min(70vw, 70vh)"
-            }}
+            key={idx}
+            className="relative flex items-center justify-center bg-black border border-gray-300 overflow-hidden"
           >
-            {videoUrls.map((url, idx) => (
-              <div
-                key={idx}
-                className="relative flex items-center justify-center rounded-none overflow-hidden border-2 border-white/20"
-              >
-                {url ? (
-                  <video
-                    ref={(el) => (videoRefs.current[idx] = el)}
-                    src={url}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="w-full h-full object-cover"
-                    onEnded={() => handleVideoEnded(idx)}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-gray-700/50 flex items-center justify-center">
-                    <span className="text-gray-400 text-sm">Empty</span>
-                  </div>
-                )}
-              </div>
-            ))}
+            {url ? (
+              <video
+                ref={(el) => (videoRefs.current[idx] = el)}
+                src={url}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="w-full h-full object-cover"
+                onEnded={() => handleVideoEnded(idx)}
+              />
+            ) : (
+              <div className="text-6xl text-cyan-400">+</div>
+            )}
           </div>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div className="flex gap-8 mt-8">
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-4 h-4 bg-green-500"></div>
+          <span className="text-white text-sm">SHARE</span>
         </div>
-        
-        {/* Back button */}
-        <div className="mt-6">
-          <Button
-            onClick={() => navigate('/')}
-            className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-6 py-3"
-          >
-            ← Back to Main Grid
-          </Button>
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-4 h-4 bg-pink-500"></div>
+          <span className="text-white text-sm">LOCK</span>
         </div>
+      </div>
+      
+      {/* Back button */}
+      <div className="mt-8">
+        <Button
+          onClick={() => navigate('/')}
+          className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
+        >
+          ← Back to Main Grid
+        </Button>
       </div>
     </div>
   );
