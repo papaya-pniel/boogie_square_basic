@@ -141,18 +141,12 @@ export default function MainGrid() {
   };
 
   const getSlotStyle = (index) => {
-    const canContribute = canContributeToPosition(index);
     const hasUserContribution = userContributions.has(index);
-    const isFilled = videos[index] !== null;
-
+    
     if (hasUserContribution) {
-      return "bg-green-500/20 border-green-400"; // User's contribution
-    } else if (isFilled) {
-      return "bg-blue-500/20 border-blue-400"; // Other user's contribution
-    } else if (canContribute) {
-      return "bg-yellow-500/20 border-yellow-400 cursor-pointer hover:bg-yellow-500/30"; // Available for user
+      return "bg-green-500/20 border-green-400"; // User's contribution - green background
     } else {
-      return "bg-gray-500/20 border-gray-400"; // Not available (user already contributed)
+      return "cursor-pointer hover:bg-gray-900"; // Default styling for other slots
     }
   };
 
@@ -198,7 +192,7 @@ export default function MainGrid() {
           <div
             key={idx}
             onClick={() => handleSlotClick(idx)}
-            className="relative flex items-center justify-center bg-black border border-gray-300 cursor-pointer hover:bg-gray-900"
+            className={`relative flex items-center justify-center bg-black border border-gray-300 ${getSlotStyle(idx)}`}
           >
             {src ? (
               // Show lock icon for recorded slots
@@ -211,17 +205,6 @@ export default function MainGrid() {
         ))}
       </div>
 
-      {/* Legend */}
-      <div className="flex gap-8 mt-8">
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-4 h-4 bg-green-500"></div>
-          <span className="text-white text-sm">SHARE</span>
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <div className="w-4 h-4 bg-pink-500"></div>
-          <span className="text-white text-sm">LOCK</span>
-        </div>
-      </div>
 
       {/* Playback Controls */}
       <div className="flex justify-center gap-4 mt-8">
