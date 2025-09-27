@@ -5,7 +5,7 @@ import { Button } from "../components/ui/button";
 
 export default function GridPlaybackPage() {
   const { index } = useParams();
-  const { videos, getS3VideoUrl } = useContext(VideoContext);
+  const { videos, videoTakes, getS3VideoUrl } = useContext(VideoContext);
   const navigate = useNavigate();
   
   const [currentTake, setCurrentTake] = useState(1); // 1, 2, or 3
@@ -18,17 +18,28 @@ export default function GridPlaybackPage() {
   const videoRefs = useRef([]);
   const audioRef = useRef(null);
   
-  // Mock data for demonstration - in a real app, this would come from your backend
-  const mockTakes = {
-    0: { take1: "/tutorial_1/Pattern-1_1.mp4", take2: "/tutorial_1/Pattern-1_1.mp4", take3: "/tutorial_1/Pattern-1_1.mp4" },
-    1: { take1: "/tutorial_1/Pattern-1_1.mp4", take2: "/tutorial_1/Pattern-1_1.mp4", take3: "/tutorial_1/Pattern-1_1.mp4" },
-    2: { take1: "/tutorial_1/Pattern-1_1.mp4", take2: "/tutorial_1/Pattern-1_1.mp4", take3: "/tutorial_1/Pattern-1_1.mp4" },
-    3: { take1: "/tutorial_1/Pattern-1_1.mp4", take2: "/tutorial_1/Pattern-1_1.mp4", take3: "/tutorial_1/Pattern-1_1.mp4" },
+  // Get the actual takes for a slot from videoTakes
+  const getTakesForSlot = (slotIndex) => {
+    const slotTakes = videoTakes[slotIndex];
+    if (slotTakes && typeof slotTakes === 'object') {
+      return {
+        take1: slotTakes.take1,
+        take2: slotTakes.take2,
+        take3: slotTakes.take3
+      };
+    }
+    // Fallback to main video if no takes data
+    const mainVideo = videos[slotIndex];
+    return {
+      take1: mainVideo,
+      take2: mainVideo,
+      take3: mainVideo
+    };
   };
   
   useEffect(() => {
     loadVideoUrls();
-  }, [currentTake]);
+  }, [currentTake, videos, videoTakes]);
 
   // Auto-play when take changes and we're in looping mode
   useEffect(() => {
@@ -43,13 +54,24 @@ export default function GridPlaybackPage() {
   const loadVideoUrls = async () => {
     setIsLoading(true);
     try {
-      // In a real implementation, you'd fetch the actual take data
-      // For now, we'll use mock data
+      // Load video URLs for all 16 slots
       const urls = [];
-      for (let i = 0; i < 4; i++) {
+      for (let i = 0; i < 16; i++) {
+        const takes = getTakesForSlot(i);
         const takeKey = `take${currentTake}`;
-        const mockTake = mockTakes[i]?.[takeKey] || null;
-        urls.push(mockTake);
+        const videoData = takes[takeKey];
+        
+        if (videoData) {
+          try {
+            const url = await getS3VideoUrl(videoData);
+            urls.push(url);
+          } catch (error) {
+            console.error(`Error loading video for slot ${i}:`, error);
+            urls.push(null);
+          }
+        } else {
+          urls.push(null);
+        }
       }
       setVideoUrls(urls);
     } catch (error) {
@@ -214,28 +236,39 @@ export default function GridPlaybackPage() {
         </div>
         
         {/* Grid */}
-        <div className="grid grid-cols-2 gap-4 mb-8">
-          {videoUrls.map((url, index) => (
-            <div key={index} className="relative bg-gray-800 rounded-lg overflow-hidden">
-              <div className="absolute top-2 left-2 z-10 bg-black bg-opacity-75 px-2 py-1 rounded text-sm">
-                Slot {index + 1}
-              </div>
-              {url ? (
-                <video
-                  ref={(el) => (videoRefs.current[index] = el)}
-                  src={url}
-                  className="w-full h-48 object-cover"
-                  onEnded={() => handleVideoEnded(index)}
-                  muted
-                  playsInline
-                />
-              ) : (
-                <div className="w-full h-48 bg-gray-700 flex items-center justify-center">
-                  <span className="text-gray-400">No video</span>
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-xl rounded-lg p-4 mb-8">
+          <div
+            className="grid gap-2"
+            style={{
+              gridTemplateColumns: `repeat(4, 1fr)`,
+              gridTemplateRows: `repeat(4, 1fr)`,
+              width: "min(80vw, 80vh)",
+              height: "min(80vw, 80vh)",
+              margin: "0 auto"
+            }}
+          >
+            {videoUrls.map((url, index) => (
+              <div key={index} className="relative bg-gray-800 rounded-lg overflow-hidden">
+                <div className="absolute top-1 left-1 z-10 bg-black bg-opacity-75 px-1 py-0.5 rounded text-xs">
+                  {index + 1}
                 </div>
-              )}
-            </div>
-          ))}
+                {url ? (
+                  <video
+                    ref={(el) => (videoRefs.current[index] = el)}
+                    src={url}
+                    className="w-full h-full object-cover"
+                    onEnded={() => handleVideoEnded(index)}
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <div className="w-full h-full bg-gray-700 flex items-center justify-center">
+                    <span className="text-gray-400 text-xs">Empty</span>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
         
         {/* Status */}

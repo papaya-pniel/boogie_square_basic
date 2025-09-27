@@ -6,6 +6,7 @@ export const VideoContext = createContext();
 
 export function VideoProvider({ children }) {
   const [videos, setVideos] = useState(Array(16).fill(null));
+  const [videoTakes, setVideoTakes] = useState(Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
   const [currentGridId, setCurrentGridId] = useState('shared-grid-1');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -125,6 +126,7 @@ export function VideoProvider({ children }) {
 
   // Shared grid storage keys - using more universal storage
   const SHARED_GRID_KEY = 'shared-boogie-grid';
+  const SHARED_VIDEO_TAKES_KEY = 'shared-boogie-video-takes';
   const SHARED_CONTRIBUTIONS_KEY = 'shared-boogie-contributions';
   
   // Create a universal grid identifier that works across all browser contexts
@@ -175,15 +177,23 @@ export function VideoProvider({ children }) {
       localStorage.setItem('storage-context', `${userEmail}-${Date.now()}`);
       localStorage.setItem('current-user-email', userEmail);
       
-      // Load shared videos and contributions
+      // Load shared videos, video takes, and contributions
       const sharedVideos = await getSharedData(SHARED_GRID_KEY);
+      const sharedVideoTakes = await getSharedData(SHARED_VIDEO_TAKES_KEY);
       const sharedContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
 
-      // Ensure 16 slots
+      // Ensure 16 slots for videos
       while (sharedVideos.length < 16) {
         sharedVideos.push(null);
       }
       setVideos(sharedVideos);
+
+      // Ensure 16 slots for video takes
+      const takesData = Array.isArray(sharedVideoTakes) ? sharedVideoTakes : [];
+      while (takesData.length < 16) {
+        takesData.push({ take1: null, take2: null, take3: null });
+      }
+      setVideoTakes(takesData);
 
       // Calculate user's contributions from shared data using email as persistent identifier
       const userContribs = new Set();
@@ -370,6 +380,46 @@ export function VideoProvider({ children }) {
     }
   };
 
+  // Function to update individual takes for a slot
+  const updateVideoTakesAtIndex = async (index, take1, take2, take3) => {
+    try {
+      console.log('updateVideoTakesAtIndex called with index:', index, 'takes:', { take1: !!take1, take2: !!take2, take3: !!take3 });
+
+      // Upload each take
+      const uploadedTakes = { take1: null, take2: null, take3: null };
+      
+      if (take1) {
+        uploadedTakes.take1 = await uploadVideoToS3(index, take1);
+      }
+      if (take2) {
+        uploadedTakes.take2 = await uploadVideoToS3(index, take2);
+      }
+      if (take3) {
+        uploadedTakes.take3 = await uploadVideoToS3(index, take3);
+      }
+
+      // Update video takes state
+      const updatedTakes = [...videoTakes];
+      updatedTakes[index] = uploadedTakes;
+      setVideoTakes(updatedTakes);
+
+      // Save to shared storage
+      await setSharedData(SHARED_VIDEO_TAKES_KEY, updatedTakes);
+
+      // Also update the main video with the merged version (for backward compatibility)
+      if (take1 && take2 && take3) {
+        // Use the last take as the main video for now
+        await updateVideoAtIndex(index, take3);
+      }
+
+      console.log('Video takes updated successfully');
+    } catch (error) {
+      console.error('Error updating video takes:', error);
+      setError(`Failed to update video takes: ${error.message}`);
+      throw error;
+    }
+  };
+
   const handleGridCompletion = async () => {
     try {
       console.log('Grid completed with 16 videos! Creating final mosaic...');
@@ -388,8 +438,10 @@ export function VideoProvider({ children }) {
 
       // Reset for new grid
       setVideos(Array(16).fill(null));
+      setVideoTakes(Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
       setUserContributions(new Set());
       await setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
+      await setSharedData(SHARED_VIDEO_TAKES_KEY, Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
       await setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
 
       const newGridId = `shared-grid-${Date.now()}`;
@@ -446,8 +498,10 @@ export function VideoProvider({ children }) {
   // Helper function to clear shared grid (for testing)
   const clearSharedGrid = async () => {
     await setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
+    await setSharedData(SHARED_VIDEO_TAKES_KEY, Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
     await setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
     setVideos(Array(16).fill(null));
+    setVideoTakes(Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
     setUserContributions(new Set());
     console.log('Shared grid cleared');
   };
@@ -475,7 +529,9 @@ export function VideoProvider({ children }) {
   return (
     <VideoContext.Provider value={{ 
       videos, 
+      videoTakes,
       updateVideoAtIndex, 
+      updateVideoTakesAtIndex,
       isLoading, 
       getS3VideoUrl,
       currentGridId,

@@ -36,7 +36,7 @@ export default function RecordPage() {
   const idxNum = parseInt(index, 10);
   const slotToUpdate = idxNum; // 4x4 grid direct mapping
 
-  const { updateVideoAtIndex } = useContext(VideoContext);
+  const { updateVideoAtIndex, updateVideoTakesAtIndex } = useContext(VideoContext);
   const navigate = useNavigate();
 
   const [recording, setRecording] = useState(false);
@@ -183,30 +183,119 @@ export default function RecordPage() {
     }
   };
 
+  // Function to merge video clips using canvas and MediaRecorder
+  const mergeVideoClips = async (clips) => {
+    return new Promise((resolve, reject) => {
+      try {
+        console.log('Merging clips:', clips.length);
+        
+        if (clips.length === 0) {
+          reject(new Error('No clips to merge'));
+          return;
+        }
+        
+        // Create a canvas for video processing
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Get dimensions from first clip
+        const firstVideo = document.createElement('video');
+        firstVideo.src = URL.createObjectURL(clips[0]);
+        
+        firstVideo.onloadedmetadata = () => {
+          canvas.width = firstVideo.videoWidth;
+          canvas.height = firstVideo.videoHeight;
+          
+          // Create a MediaStream from canvas
+          const stream = canvas.captureStream(30); // 30 FPS
+          const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+          const chunks = [];
+          
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) {
+              chunks.push(e.data);
+            }
+          };
+          
+          mediaRecorder.onstop = () => {
+            const mergedBlob = new Blob(chunks, { type: 'video/webm' });
+            console.log('Merged video created:', mergedBlob.size, 'bytes');
+            resolve(mergedBlob);
+          };
+          
+          // Start recording
+          mediaRecorder.start();
+          
+          // Play each clip sequentially
+          let currentClipIndex = 0;
+          
+          const playNextClip = () => {
+            if (currentClipIndex >= clips.length) {
+              // All clips processed, stop recording
+              setTimeout(() => {
+                mediaRecorder.stop();
+              }, 500); // Give a moment for the last frame
+              return;
+            }
+            
+            const currentClip = clips[currentClipIndex];
+            const clipVideo = document.createElement('video');
+            clipVideo.src = URL.createObjectURL(currentClip);
+            clipVideo.muted = true;
+            clipVideo.crossOrigin = 'anonymous';
+            
+            clipVideo.onloadeddata = () => {
+              clipVideo.play();
+            };
+            
+            clipVideo.ontimeupdate = () => {
+              // Draw current frame to canvas
+              try {
+                ctx.drawImage(clipVideo, 0, 0, canvas.width, canvas.height);
+              } catch (e) {
+                console.warn('Error drawing video frame:', e);
+              }
+            };
+            
+            clipVideo.onended = () => {
+              currentClipIndex++;
+              // Small delay between clips
+              setTimeout(playNextClip, 200);
+            };
+            
+            clipVideo.onerror = (e) => {
+              console.error('Error playing clip:', e);
+              currentClipIndex++;
+              setTimeout(playNextClip, 200);
+            };
+          };
+          
+          // Start the process
+          playNextClip();
+        };
+        
+        firstVideo.onerror = () => {
+          reject(new Error('Failed to load first clip'));
+        };
+        
+      } catch (error) {
+        console.error('Error in mergeVideoClips:', error);
+        reject(error);
+      }
+    });
+  };
+
   // Function to save all takes separately for synchronized grid playback
   const saveAllTakesToGrid = async (clips) => {
     try {
       console.log('Saving all takes separately:', clips.length);
       
-      // Save each take to a different "slot" in the grid
-      // This allows synchronized playback across the grid
-      for (let i = 0; i < clips.length; i++) {
-        const clip = clips[i];
-        const blobUrl = URL.createObjectURL(clip);
-        
-        // Save to a "take-specific" slot
-        // For now, we'll save to the main slot, but in a real implementation
-        // you'd save to take-specific slots (e.g., slot_0_take_1, slot_0_take_2, etc.)
-        if (i === clips.length - 1) {
-          // Save the last take to the main slot
-          await updateVideoAtIndex(slotToUpdate, blobUrl);
-        }
-        
-        // In a full implementation, you'd also save to:
-        // - slot_0_take_1, slot_0_take_2, slot_0_take_3
-        // - This allows the grid to play all "Take 1" videos simultaneously
-        // - Then switch to all "Take 2" videos, etc.
-      }
+      // Save all 3 takes to the same slot using the new function
+      const take1 = clips[0] || null;
+      const take2 = clips[1] || null;
+      const take3 = clips[2] || null;
+      
+      await updateVideoTakesAtIndex(slotToUpdate, take1, take2, take3);
       
       console.log('All takes saved successfully');
       
