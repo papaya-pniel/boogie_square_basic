@@ -43,7 +43,15 @@ export default function MainGrid() {
           videos.map(async (video) => {
             if (!video) return null;
             try {
-              return await getS3VideoUrl(video);
+              const url = await getS3VideoUrl(video);
+              // Test if the URL is accessible
+              const response = await fetch(url, { method: 'HEAD' });
+              if (response.ok) {
+                return url;
+              } else {
+                console.warn(`Video URL not accessible: ${url}`);
+                return null;
+              }
             } catch (error) {
               console.error('Error fetching video URL:', error);
               return null;

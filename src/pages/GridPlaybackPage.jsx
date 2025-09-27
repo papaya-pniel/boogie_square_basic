@@ -22,7 +22,7 @@ export default function GridPlaybackPage() {
   // Get the actual takes for a slot from videoTakes
   const getTakesForSlot = (slotIndex) => {
     const slotTakes = videoTakes[slotIndex];
-    if (slotTakes && typeof slotTakes === 'object') {
+    if (slotTakes && typeof slotTakes === 'object' && (slotTakes.take1 || slotTakes.take2 || slotTakes.take3)) {
       return {
         take1: slotTakes.take1,
         take2: slotTakes.take2,
@@ -72,6 +72,10 @@ export default function GridPlaybackPage() {
   const loadAllVideoUrls = async () => {
     setIsLoading(true);
     try {
+      console.log('Loading video URLs...');
+      console.log('videos array:', videos);
+      console.log('videoTakes array:', videoTakes);
+      
       // Load video URLs for all 16 slots and all 3 takes
       const take1Urls = [];
       const take2Urls = [];
@@ -79,6 +83,7 @@ export default function GridPlaybackPage() {
       
       for (let i = 0; i < 16; i++) {
         const takes = getTakesForSlot(i);
+        console.log(`Slot ${i} takes:`, takes);
         
         // Load take 1
         if (takes.take1) {
@@ -120,6 +125,7 @@ export default function GridPlaybackPage() {
         }
       }
       
+      console.log('Loaded URLs:', { take1: take1Urls, take2: take2Urls, take3: take3Urls });
       setAllTakeUrls({ take1: take1Urls, take2: take2Urls, take3: take3Urls });
       
       // Set initial take
