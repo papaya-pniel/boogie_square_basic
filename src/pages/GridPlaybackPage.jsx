@@ -13,6 +13,7 @@ export default function GridPlaybackPage() {
   const [isLooping, setIsLooping] = useState(false);
   const [videoElements, setVideoElements] = useState([]);
   const [videoUrls, setVideoUrls] = useState([]);
+  const [allTakeUrls, setAllTakeUrls] = useState({ take1: [], take2: [], take3: [] }); // Preload all takes
   const [isLoading, setIsLoading] = useState(true);
   
   const videoRefs = useRef([]);
@@ -37,48 +38,91 @@ export default function GridPlaybackPage() {
     };
   };
   
+  // Load all takes once when component mounts or data changes
   useEffect(() => {
-    loadVideoUrls();
-  }, [currentTake, videos, videoTakes]);
+    loadAllVideoUrls();
+  }, [videos, videoTakes]);
 
-  // Auto-play when take changes and we're in looping mode
+  // Switch to current take without reloading
   useEffect(() => {
-    if (isLooping && !isLoading) {
-      const timer = setTimeout(() => {
-        playAllVideos();
-      }, 500); // Small delay to ensure videos are loaded
-      return () => clearTimeout(timer);
+    switchToTake(currentTake);
+  }, [currentTake, allTakeUrls]);
+
+  // Start auto-looping when videos are loaded
+  useEffect(() => {
+    if (!isLoading && videoUrls.some(url => url !== null)) {
+      setIsLooping(true);
+      setIsPlaying(true);
+      playAllVideos();
     }
-  }, [currentTake, isLooping, isLoading]);
+  }, [isLoading, videoUrls]);
   
-  const loadVideoUrls = async () => {
+  const loadAllVideoUrls = async () => {
     setIsLoading(true);
     try {
-      // Load video URLs for all 16 slots
-      const urls = [];
+      // Load video URLs for all 16 slots and all 3 takes
+      const take1Urls = [];
+      const take2Urls = [];
+      const take3Urls = [];
+      
       for (let i = 0; i < 16; i++) {
         const takes = getTakesForSlot(i);
-        const takeKey = `take${currentTake}`;
-        const videoData = takes[takeKey];
         
-        if (videoData) {
+        // Load take 1
+        if (takes.take1) {
           try {
-            const url = await getS3VideoUrl(videoData);
-            urls.push(url);
+            const url = await getS3VideoUrl(takes.take1);
+            take1Urls.push(url);
           } catch (error) {
-            console.error(`Error loading video for slot ${i}:`, error);
-            urls.push(null);
+            console.error(`Error loading take 1 for slot ${i}:`, error);
+            take1Urls.push(null);
           }
         } else {
-          urls.push(null);
+          take1Urls.push(null);
+        }
+        
+        // Load take 2
+        if (takes.take2) {
+          try {
+            const url = await getS3VideoUrl(takes.take2);
+            take2Urls.push(url);
+          } catch (error) {
+            console.error(`Error loading take 2 for slot ${i}:`, error);
+            take2Urls.push(null);
+          }
+        } else {
+          take2Urls.push(null);
+        }
+        
+        // Load take 3
+        if (takes.take3) {
+          try {
+            const url = await getS3VideoUrl(takes.take3);
+            take3Urls.push(url);
+          } catch (error) {
+            console.error(`Error loading take 3 for slot ${i}:`, error);
+            take3Urls.push(null);
+          }
+        } else {
+          take3Urls.push(null);
         }
       }
-      setVideoUrls(urls);
+      
+      setAllTakeUrls({ take1: take1Urls, take2: take2Urls, take3: take3Urls });
+      
+      // Set initial take
+      switchToTake(currentTake, { take1: take1Urls, take2: take2Urls, take3: take3Urls });
     } catch (error) {
       console.error('Error loading video URLs:', error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const switchToTake = (takeNumber, urls = allTakeUrls) => {
+    const takeKey = `take${takeNumber}`;
+    const currentUrls = urls[takeKey] || [];
+    setVideoUrls(currentUrls);
   };
   
   const playAllVideos = () => {
@@ -110,22 +154,6 @@ export default function GridPlaybackPage() {
     });
   };
   
-  const switchTake = (takeNumber) => {
-    setCurrentTake(takeNumber);
-    stopAllVideos();
-  };
-
-  const startLooping = () => {
-    setIsLooping(true);
-    setIsPlaying(true);
-    playAllVideos();
-  };
-
-  const stopLooping = () => {
-    setIsLooping(false);
-    setIsPlaying(false);
-    stopAllVideos();
-  };
   
   const handleVideoEnded = (index) => {
     // Check if all videos have ended
@@ -158,112 +186,44 @@ export default function GridPlaybackPage() {
   }
   
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">🎬 Synchronized Grid Playback</h1>
-          <p className="text-gray-300 mb-6">
-            Watch all your takes play together in perfect synchronization!
-          </p>
-          
-          {/* Take Selection */}
-          <div className="flex justify-center gap-4 mb-6">
-            <Button
-              onClick={() => switchTake(1)}
-              disabled={isLooping}
-              className={`px-6 py-3 ${currentTake === 1 ? 'bg-blue-600' : 'bg-gray-600'} ${isLooping ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              Take 1
-            </Button>
-            <Button
-              onClick={() => switchTake(2)}
-              disabled={isLooping}
-              className={`px-6 py-3 ${currentTake === 2 ? 'bg-blue-600' : 'bg-gray-600'} ${isLooping ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              Take 2
-            </Button>
-            <Button
-              onClick={() => switchTake(3)}
-              disabled={isLooping}
-              className={`px-6 py-3 ${currentTake === 3 ? 'bg-blue-600' : 'bg-gray-600'} ${isLooping ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              Take 3
-            </Button>
-          </div>
-          
-          {/* Playback Controls */}
-          <div className="flex justify-center gap-4 mb-8">
-            <Button
-              onClick={playAllVideos}
-              disabled={isPlaying || isLooping}
-              className="bg-green-600 hover:bg-green-700 px-6 py-3"
-            >
-              ▶️ Play All
-            </Button>
-            <Button
-              onClick={pauseAllVideos}
-              disabled={!isPlaying}
-              className="bg-yellow-600 hover:bg-yellow-700 px-6 py-3"
-            >
-              ⏸️ Pause All
-            </Button>
-            <Button
-              onClick={stopAllVideos}
-              className="bg-red-600 hover:bg-red-700 px-6 py-3"
-            >
-              ⏹️ Stop All
-            </Button>
-          </div>
-
-          {/* Looping Controls */}
-          <div className="flex justify-center gap-4 mb-8">
-            <Button
-              onClick={startLooping}
-              disabled={isLooping}
-              className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
-            >
-              🔄 Start Auto-Loop (Take 1→2→3→1...)
-            </Button>
-            <Button
-              onClick={stopLooping}
-              disabled={!isLooping}
-              className="bg-orange-600 hover:bg-orange-700 px-6 py-3"
-            >
-              ⏹️ Stop Auto-Loop
-            </Button>
-          </div>
-        </div>
+    <div
+      className="relative min-h-screen text-white overflow-hidden"
+      style={{ background: "linear-gradient(to top, #4466ff, #66bbff)" }}
+    >
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen p-2 gap-2">
+        <h1 className="text-4xl font-bold text-center">🎬 Synchronized Grid Playback</h1>
+        <p className="text-gray-200 text-center">Watch all takes play together in perfect synchronization!</p>
         
         {/* Grid */}
-        <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-xl rounded-lg p-4 mb-8">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 shadow-xl">
           <div
-            className="grid gap-2"
+            className="grid gap-0"
             style={{
               gridTemplateColumns: `repeat(4, 1fr)`,
               gridTemplateRows: `repeat(4, 1fr)`,
-              width: "min(80vw, 80vh)",
-              height: "min(80vw, 80vh)",
-              margin: "0 auto"
+              width: "min(70vw, 70vh)",
+              height: "min(70vw, 70vh)"
             }}
           >
-            {videoUrls.map((url, index) => (
-              <div key={index} className="relative bg-gray-800 rounded-lg overflow-hidden">
-                <div className="absolute top-1 left-1 z-10 bg-black bg-opacity-75 px-1 py-0.5 rounded text-xs">
-                  {index + 1}
-                </div>
+            {videoUrls.map((url, idx) => (
+              <div
+                key={idx}
+                className="relative flex items-center justify-center rounded-none overflow-hidden border-2 border-white/20"
+              >
                 {url ? (
                   <video
-                    ref={(el) => (videoRefs.current[index] = el)}
+                    ref={(el) => (videoRefs.current[idx] = el)}
                     src={url}
-                    className="w-full h-full object-cover"
-                    onEnded={() => handleVideoEnded(index)}
+                    autoPlay
                     muted
+                    loop
                     playsInline
+                    className="w-full h-full object-cover"
+                    onEnded={() => handleVideoEnded(idx)}
                   />
                 ) : (
-                  <div className="w-full h-full bg-gray-700 flex items-center justify-center">
-                    <span className="text-gray-400 text-xs">Empty</span>
+                  <div className="w-full h-full bg-gray-700/50 flex items-center justify-center">
+                    <span className="text-gray-400 text-sm">Empty</span>
                   </div>
                 )}
               </div>
@@ -271,33 +231,14 @@ export default function GridPlaybackPage() {
           </div>
         </div>
         
-        {/* Status */}
-        <div className="text-center">
-          <p className="text-gray-300 mb-4">
-            Currently playing: <span className="font-bold">Take {currentTake}</span>
-            {isPlaying && <span className="ml-2 text-green-400">● Playing</span>}
-            {isLooping && <span className="ml-2 text-purple-400">🔄 Auto-Looping</span>}
-          </p>
-          {isLooping && (
-            <p className="text-sm text-gray-400 mb-4">
-              Auto-cycling through all takes: Take 1 → Take 2 → Take 3 → Take 1...
-            </p>
-          )}
-          
-          <div className="flex justify-center gap-4">
-            <Button
-              onClick={() => navigate('/')}
-              className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
-            >
-              ← Back to Main Grid
-            </Button>
-            <Button
-              onClick={() => navigate(`/record/${index}`)}
-              className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
-            >
-              🔄 Record New Takes
-            </Button>
-          </div>
+        {/* Back button */}
+        <div className="mt-6">
+          <Button
+            onClick={() => navigate('/')}
+            className="bg-white/20 hover:bg-white/30 text-white border border-white/30 px-6 py-3"
+          >
+            ← Back to Main Grid
+          </Button>
         </div>
       </div>
     </div>
