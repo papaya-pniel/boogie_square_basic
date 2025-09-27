@@ -206,7 +206,7 @@ export default function MainGrid() {
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-green-400 rounded"></div>
-            <span>Your video</span>
+            <span>Your slot</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 bg-blue-400 rounded"></div>
@@ -236,7 +236,11 @@ export default function MainGrid() {
                 className={`relative flex items-center justify-center rounded-none overflow-hidden border-2 ${getSlotStyle(idx)}`}
               >
                 {src ? (
-                  <video key={`${idx}-${src}`} src={src} autoPlay muted loop playsInline className="w-full h-full object-cover" />
+                  // Show lock icon for recorded slots instead of video
+                  <div className="flex flex-col items-center justify-center w-full h-full">
+                    <div className="text-6xl mb-2">🔒</div>
+                    <div className="text-sm text-white/80 font-bold">RECORDED</div>
+                  </div>
                 ) : (
                   <>
                     <video
