@@ -316,7 +316,8 @@ export function VideoProvider({ children }) {
 
   const updateVideoAtIndex = async (index, videoUrl) => {
     try {
-      console.log('updateVideoAtIndex called with index:', index, 'currentGridId:', currentGridId);
+      console.log('🎬 VideoContext: updateVideoAtIndex called with index:', index, 'currentGridId:', currentGridId);
+      console.log('🎬 VideoContext: videoUrl type:', typeof videoUrl, videoUrl);
 
       const ownedIndex = getUserOwnedIndex();
       const isUpdatingOwnSlot = ownedIndex === index || userContributions.has(index);
@@ -334,26 +335,33 @@ export function VideoProvider({ children }) {
       //   throw new Error('This position is already filled by another user');
       // }
 
+      console.log('☁️ VideoContext: Uploading video to S3...');
       // Upload (local server in dev, S3 in prod)
       const storedValue = await uploadVideoToS3(index, videoUrl);
+      console.log('✅ VideoContext: Video uploaded, stored value:', storedValue);
 
       // Cache-bust if it is an http(s) URL
       const mergedSaved = (typeof storedValue === 'string' && (storedValue.startsWith('http://') || storedValue.startsWith('https://')))
         ? storedValue + (storedValue.includes('?') ? `&t=${Date.now()}` : `?t=${Date.now()}`)
         : storedValue;
 
+      console.log('💾 VideoContext: Updating videos array with stored value:', mergedSaved);
       // Update shared state
       const updatedVideos = [...videos];
       updatedVideos[index] = mergedSaved;
       setVideos(updatedVideos);
+      console.log('📋 VideoContext: Updated videos array:', updatedVideos);
 
       // Save to shared storage
+      console.log('💾 VideoContext: Saving to shared storage...');
       await setSharedData(SHARED_GRID_KEY, updatedVideos);
+      console.log('✅ VideoContext: Saved to shared storage');
 
       // Track user's contribution (replace existing record for this user)
       const updatedContributions = new Set(userContributions);
       updatedContributions.add(index);
       setUserContributions(updatedContributions);
+      console.log('👤 VideoContext: Updated user contributions:', Array.from(updatedContributions));
 
       const allContributionsRaw = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
       const allContributions = Array.isArray(allContributionsRaw) ? allContributionsRaw : [];
@@ -366,6 +374,7 @@ export function VideoProvider({ children }) {
         timestamp: new Date().toISOString(),
       });
       await setSharedData(SHARED_CONTRIBUTIONS_KEY, filtered);
+      console.log('✅ VideoContext: Updated contributions in shared storage');
 
       // Skip localhost server - data is already saved to localStorage
       
@@ -373,8 +382,10 @@ export function VideoProvider({ children }) {
       if (updatedVideos.every(v => v !== null)) {
         await handleGridCompletion();
       }
+      
+      console.log('🎉 VideoContext: updateVideoAtIndex completed successfully');
     } catch (error) {
-      console.error('Error updating video:', error);
+      console.error('❌ VideoContext: Error updating video:', error);
       setError(`Failed to update video: ${error.message}`);
       throw error;
     }

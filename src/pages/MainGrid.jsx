@@ -18,6 +18,7 @@ export default function MainGrid() {
   const navigate = useNavigate();
   const { 
     videos, 
+    videoTakes,
     updateVideoAtIndex, 
     isLoading, 
     getS3VideoUrl, 
@@ -30,6 +31,11 @@ export default function MainGrid() {
   const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
   const [gridReady, setGridReady] = useState(false);
 
+  // Synchronized playback state
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTake, setCurrentTake] = useState(1); // 1, 2, or 3
+  const [playbackInterval, setPlaybackInterval] = useState(null);
+
   const audioRef = useRef();
   const totalSlots = 16; // Always 16 squares
   const [videoUrls, setVideoUrls] = useState([]);
@@ -39,32 +45,54 @@ export default function MainGrid() {
     
     async function fetchVideoUrls() {
       try {
+        console.log('🔄 MainGrid: Fetching video URLs for current take:', currentTake);
+        console.log('🔄 MainGrid: VideoTakes data:', videoTakes);
+        
         const urls = await Promise.all(
-          videos.map(async (video) => {
-            if (!video) return null;
+          videoTakes.map(async (takes, index) => {
+            if (!takes || (!takes.take1 && !takes.take2 && !takes.take3)) {
+              console.log(`📭 MainGrid: No takes at index ${index}`);
+              return null;
+            }
+            
+            // Get the current take based on currentTake state
+            const currentTakeKey = `take${currentTake}`;
+            const currentTakeVideo = takes[currentTakeKey];
+            
+            if (!currentTakeVideo) {
+              console.log(`📭 MainGrid: No take ${currentTake} at index ${index}`);
+              return null;
+            }
+            
             try {
-              const url = await getS3VideoUrl(video);
+              console.log(`🎥 MainGrid: Processing take ${currentTake} at index ${index}:`, currentTakeVideo);
+              const url = await getS3VideoUrl(currentTakeVideo);
+              console.log(`🔗 MainGrid: Got URL for take ${currentTake} at index ${index}:`, url);
+              
               // Test if the URL is accessible
               const response = await fetch(url, { method: 'HEAD' });
               if (response.ok) {
+                console.log(`✅ MainGrid: Video URL accessible for take ${currentTake} at index ${index}`);
                 return url;
               } else {
-                console.warn(`Video URL not accessible: ${url}`);
+                console.warn(`❌ MainGrid: Video URL not accessible for take ${currentTake} at index ${index}:`, url);
                 return null;
               }
             } catch (error) {
-              console.error('Error fetching video URL:', error);
+              console.error(`❌ MainGrid: Error fetching video URL for take ${currentTake} at index ${index}:`, error);
               return null;
             }
           })
         );
+        
+        console.log('📋 MainGrid: Final video URLs for take', currentTake, ':', urls);
         
         // Only update state if component is still mounted
         if (isMounted) {
           setVideoUrls(urls);
         }
       } catch (error) {
-        console.error('Error fetching video URLs:', error);
+        console.error('❌ MainGrid: Error fetching video URLs:', error);
         if (isMounted) {
           setVideoUrls([]);
         }
@@ -77,10 +105,53 @@ export default function MainGrid() {
     return () => {
       isMounted = false;
     };
-  }, [videos, getS3VideoUrl]);
+  }, [videoTakes, currentTake, getS3VideoUrl]);
 
   const paddedVideos = [...videoUrls];
   while (paddedVideos.length < totalSlots) paddedVideos.push(null);
+
+  // Synchronized playback functions
+  const startSynchronizedPlayback = () => {
+    if (isPlaying) return;
+    
+    console.log('🎬 Starting synchronized playback');
+    setIsPlaying(true);
+    setCurrentTake(1);
+    
+    // Cycle through takes every 3 seconds
+    const interval = setInterval(() => {
+      setCurrentTake(prevTake => {
+        const nextTake = prevTake === 3 ? 1 : prevTake + 1;
+        console.log(`🎬 Switching to take ${nextTake}`);
+        return nextTake;
+      });
+    }, 3000); // 3 seconds per take
+    
+    setPlaybackInterval(interval);
+  };
+
+  const stopSynchronizedPlayback = () => {
+    if (!isPlaying) return;
+    
+    console.log('⏹️ Stopping synchronized playback');
+    setIsPlaying(false);
+    
+    if (playbackInterval) {
+      clearInterval(playbackInterval);
+      setPlaybackInterval(null);
+    }
+    
+    setCurrentTake(1); // Reset to take 1
+  };
+
+  // Cleanup interval on unmount
+  useEffect(() => {
+    return () => {
+      if (playbackInterval) {
+        clearInterval(playbackInterval);
+      }
+    };
+  }, [playbackInterval]);
 
   useEffect(() => {
     if (audioRef.current) {
@@ -132,11 +203,12 @@ export default function MainGrid() {
   }, [paddedVideos]);
 
   const handleSlotClick = (index) => {
-    const hasRecording = paddedVideos[index] !== null;
     const hasUserContribution = userContributions.has(index);
+    // Check if there are any takes recorded for this slot (not just current take)
+    const hasAnyRecording = videoTakes[index] && (videoTakes[index].take1 || videoTakes[index].take2 || videoTakes[index].take3);
     
     // Don't allow clicking on slots with recordings from other users
-    if (hasRecording && !hasUserContribution) return;
+    if (hasAnyRecording && !hasUserContribution) return;
     
     if (!canContributeToPosition(index)) return;
     navigate(`/record/${index}`);
@@ -145,11 +217,12 @@ export default function MainGrid() {
 
   const getSlotStyle = (index) => {
     const hasUserContribution = userContributions.has(index);
-    const hasRecording = paddedVideos[index] !== null;
+    // Check if there are any takes recorded for this slot (not just current take)
+    const hasAnyRecording = videoTakes[index] && (videoTakes[index].take1 || videoTakes[index].take2 || videoTakes[index].take3);
     
     if (hasUserContribution) {
       return "bg-green-500/20 border-green-400 cursor-pointer hover:bg-green-500/30"; // User's contribution - green background
-    } else if (hasRecording) {
+    } else if (hasAnyRecording) {
       return "bg-red-500/20 border-red-400 cursor-not-allowed"; // Someone else's recording - red background, no interaction
     } else {
       return "cursor-pointer hover:bg-gray-900"; // Available slot - default styling
@@ -196,7 +269,9 @@ export default function MainGrid() {
       >
         {paddedVideos.map((src, idx) => {
           const hasUserContribution = userContributions.has(idx);
-          const hasRecording = src !== null;
+          // Check if there are any takes recorded for this slot (not just current take)
+          const hasAnyRecording = videoTakes[idx] && (videoTakes[idx].take1 || videoTakes[idx].take2 || videoTakes[idx].take3);
+          const hasCurrentTake = src !== null;
           
           return (
             <div
@@ -204,7 +279,7 @@ export default function MainGrid() {
               onClick={() => handleSlotClick(idx)}
               className={`relative flex items-center justify-center bg-black border border-gray-300 ${getSlotStyle(idx)}`}
             >
-              {hasRecording ? (
+              {hasCurrentTake ? (
                 <>
                   {/* Show the actual recorded video */}
                   <video
@@ -216,7 +291,7 @@ export default function MainGrid() {
                     className="absolute inset-0 w-full h-full object-cover z-0"
                   />
                   {/* Lock overlay for other users' recordings */}
-                  {!hasUserContribution && (
+                  {!hasUserContribution && hasAnyRecording && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
                       <div className="text-6xl text-red-400">🔒</div>
                     </div>
@@ -249,19 +324,65 @@ export default function MainGrid() {
       </div>
 
 
-      {/* Controls */}
-      <div className="flex justify-center gap-4 mt-8">
-        <Button
-          onClick={async () => {
-            if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
-              await clearSharedGrid();
-              window.location.reload();
-            }
-          }}
-          className="bg-red-600 hover:bg-red-700 px-6 py-3"
-        >
-          🗑️ Clear Grid (Testing)
-        </Button>
+      {/* Synchronized Playback Controls */}
+      <div className="flex flex-col items-center gap-4 mt-8">
+        {/* Playback Status */}
+        {isPlaying && (
+          <div className="text-center">
+            <div className="text-2xl font-bold text-cyan-400 mb-2">
+              🎬 Take {currentTake} Playing
+            </div>
+            <div className="text-sm text-gray-400">
+              All squares showing Take {currentTake} videos
+            </div>
+          </div>
+        )}
+        
+        {/* Playback Controls */}
+        <div className="flex gap-4">
+          {!isPlaying ? (
+            <Button
+              onClick={startSynchronizedPlayback}
+              className="bg-green-600 hover:bg-green-700 px-6 py-3"
+            >
+              🎬 Start Synchronized Playback
+            </Button>
+          ) : (
+            <Button
+              onClick={stopSynchronizedPlayback}
+              className="bg-red-600 hover:bg-red-700 px-6 py-3"
+            >
+              ⏹️ Stop Playback
+            </Button>
+          )}
+          
+          <Button
+            onClick={async () => {
+              if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
+                await clearSharedGrid();
+                window.location.reload();
+              }
+            }}
+            className="bg-gray-600 hover:bg-gray-700 px-6 py-3"
+          >
+            🗑️ Clear Grid (Testing)
+          </Button>
+        </div>
+        
+        {/* Instructions */}
+        <div className="text-center text-sm text-gray-400 max-w-md">
+          {!isPlaying ? (
+            <p>
+              💡 Click "Start Synchronized Playback" to see all recorded videos play together! 
+              Takes will cycle every 3 seconds: Take 1 → Take 2 → Take 3 → repeat.
+            </p>
+          ) : (
+            <p>
+              🎵 All squares are now playing Take {currentTake} videos in sync. 
+              The takes will automatically cycle every 3 seconds.
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Audio Player */}

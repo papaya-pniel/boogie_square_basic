@@ -168,15 +168,24 @@ export default function RecordPage() {
       setIsUploading(true);
       setUploadError(null);
       
+      console.log('🎬 Starting merged video save process...');
+      
       // Get the merged video blob
       const mergedBlob = await mergeVideoClips(clips);
-      const mergedUrl = URL.createObjectURL(mergedBlob);
+      console.log('✅ Merged video blob created:', mergedBlob.size, 'bytes');
       
-      await updateVideoAtIndex(slotToUpdate, mergedUrl);
+      const mergedUrl = URL.createObjectURL(mergedBlob);
+      console.log('🔗 Blob URL created:', mergedUrl);
+      
+      console.log('💾 Uploading to grid at index:', slotToUpdate);
+      await updateVideoAtIndex(slotToUpdate, mergedBlob); // Pass blob directly instead of URL
+      console.log('✅ Video uploaded successfully');
+      
       // Navigate back to the main grid
+      console.log('🏠 Navigating back to main grid...');
       navigate('/');
     } catch (e) {
-      console.error(e);
+      console.error('❌ Error in handleSaveMergedVideo:', e);
       setUploadError('Failed to save video. Please try again.');
     } finally {
       setIsUploading(false);
