@@ -276,12 +276,6 @@ export default function MainGrid() {
                       className="absolute inset-0 w-full h-full object-cover z-0"
                     />
                   )}
-                  {/* Lock overlay for other users' recordings */}
-                  {!hasUserContribution && (
-                    <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                      <div className="text-4xl text-red-400 bg-black/30 rounded-full p-2 backdrop-blur-sm">🔒</div>
-                    </div>
-                  )}
                   {/* User's own recording indicator */}
                   {hasUserContribution && (
                     <div className="absolute top-1 right-1 bg-green-500/80 text-white text-xs px-1 rounded z-20 backdrop-blur-sm">
