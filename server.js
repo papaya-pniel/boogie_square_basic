@@ -21,6 +21,8 @@ app.use(cors());
 app.use(express.json());
 
 const SHARED_DATA_FILE = path.join(__dirname, 'public', 'shared-grid-data.json');
+const SHARED_VIDEO_TAKES_FILE = path.join(__dirname, 'public', 'shared-video-takes.json');
+const SHARED_CONTRIBUTIONS_FILE = path.join(__dirname, 'public', 'shared-contributions.json');
 
 // Static uploads
 import fsSync from 'fs';
@@ -141,6 +143,76 @@ app.post('/api/shared-grid', async (req, res) => {
   } catch (error) {
     console.error('Error updating shared grid data:', error);
     res.status(500).json({ error: 'Failed to update shared grid data' });
+  }
+});
+
+// Video takes endpoints
+app.get('/api/shared-video-takes', async (req, res) => {
+  try {
+    const data = await fs.readFile(SHARED_VIDEO_TAKES_FILE, 'utf8');
+    try {
+      const parsed = JSON.parse(data);
+      return res.json(parsed);
+    } catch (e) {
+      // fall through to default
+    }
+  } catch (error) {
+    // file missing or unreadable; fall through to default
+  }
+  try {
+    const fallback = Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null }));
+    await fs.writeFile(SHARED_VIDEO_TAKES_FILE, JSON.stringify(fallback, null, 2));
+    return res.json(fallback);
+  } catch (e) {
+    console.error('Error initializing shared video takes data:', e);
+    return res.status(500).json({ error: 'Failed to read shared video takes data' });
+  }
+});
+
+app.post('/api/shared-video-takes', async (req, res) => {
+  try {
+    const { videoTakes } = req.body || {};
+    const updatedData = Array.isArray(videoTakes) ? videoTakes : Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null }));
+    await fs.writeFile(SHARED_VIDEO_TAKES_FILE, JSON.stringify(updatedData, null, 2));
+    res.json(updatedData);
+  } catch (error) {
+    console.error('Error updating shared video takes data:', error);
+    res.status(500).json({ error: 'Failed to update shared video takes data' });
+  }
+});
+
+// Contributions endpoints
+app.get('/api/shared-contributions', async (req, res) => {
+  try {
+    const data = await fs.readFile(SHARED_CONTRIBUTIONS_FILE, 'utf8');
+    try {
+      const parsed = JSON.parse(data);
+      return res.json(parsed);
+    } catch (e) {
+      // fall through to default
+    }
+  } catch (error) {
+    // file missing or unreadable; fall through to default
+  }
+  try {
+    const fallback = [];
+    await fs.writeFile(SHARED_CONTRIBUTIONS_FILE, JSON.stringify(fallback, null, 2));
+    return res.json(fallback);
+  } catch (e) {
+    console.error('Error initializing shared contributions data:', e);
+    return res.status(500).json({ error: 'Failed to read shared contributions data' });
+  }
+});
+
+app.post('/api/shared-contributions', async (req, res) => {
+  try {
+    const { contributions } = req.body || {};
+    const updatedData = Array.isArray(contributions) ? contributions : [];
+    await fs.writeFile(SHARED_CONTRIBUTIONS_FILE, JSON.stringify(updatedData, null, 2));
+    res.json(updatedData);
+  } catch (error) {
+    console.error('Error updating shared contributions data:', error);
+    res.status(500).json({ error: 'Failed to update shared contributions data' });
   }
 });
 

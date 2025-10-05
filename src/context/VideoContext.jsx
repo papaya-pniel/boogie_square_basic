@@ -135,7 +135,28 @@ export function VideoProvider({ children }) {
   // Server-based shared storage (works across all browser contexts)
   const getSharedData = async (key) => {
     try {
-      // Skip localhost server - use localStorage directly
+      // Use server API for cross-user sharing
+      if (key === SHARED_GRID_KEY) {
+        const response = await fetch('http://localhost:3001/api/shared-grid');
+        if (response.ok) {
+          const data = await response.json();
+          return data.videos || Array(16).fill(null);
+        }
+      } else if (key === SHARED_VIDEO_TAKES_KEY) {
+        const response = await fetch('http://localhost:3001/api/shared-video-takes');
+        if (response.ok) {
+          const data = await response.json();
+          return data || Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null }));
+        }
+      } else if (key === SHARED_CONTRIBUTIONS_KEY) {
+        const response = await fetch('http://localhost:3001/api/shared-contributions');
+        if (response.ok) {
+          const data = await response.json();
+          return data || [];
+        }
+      }
+      
+      // For other keys, fall back to localStorage
       let data = localStorage.getItem(key);
       if (!data) {
         const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
@@ -145,20 +166,62 @@ export function VideoProvider({ children }) {
       return JSON.parse(data);
     } catch (error) {
       console.error('Error getting shared data:', error);
-      // Fallback to default values
-      const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
-      return emptyData;
+      // Fallback to localStorage
+      let data = localStorage.getItem(key);
+      if (!data) {
+        const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
+        localStorage.setItem(key, JSON.stringify(emptyData));
+        return emptyData;
+      }
+      return JSON.parse(data);
     }
   };
 
   const setSharedData = async (key, data) => {
     try {
-      // Save to localStorage (skip localhost server)
+      // Use server API for cross-user sharing
+      if (key === SHARED_GRID_KEY) {
+        const response = await fetch('http://localhost:3001/api/shared-grid', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videos: data })
+        });
+        if (response.ok) {
+          console.log('📊 Data saved to server:', key, data);
+          // Also save to localStorage for offline access
+          localStorage.setItem(key, JSON.stringify(data));
+          window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
+          return;
+        }
+      } else if (key === SHARED_VIDEO_TAKES_KEY) {
+        const response = await fetch('http://localhost:3001/api/shared-video-takes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoTakes: data })
+        });
+        if (response.ok) {
+          console.log('📊 Video takes saved to server:', key, data);
+          localStorage.setItem(key, JSON.stringify(data));
+          window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
+          return;
+        }
+      } else if (key === SHARED_CONTRIBUTIONS_KEY) {
+        const response = await fetch('http://localhost:3001/api/shared-contributions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ contributions: data })
+        });
+        if (response.ok) {
+          console.log('📊 Contributions saved to server:', key, data);
+          localStorage.setItem(key, JSON.stringify(data));
+          window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
+          return;
+        }
+      }
+      
+      // For other keys, use localStorage
       localStorage.setItem(key, JSON.stringify(data));
-      
-      // Trigger event for same-browser tabs to sync
       window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
-      
       console.log('📊 Data saved to localStorage:', key, data);
       
     } catch (error) {
