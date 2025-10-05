@@ -334,17 +334,17 @@ export default function RecordPage() {
       {!previewUrl ? (
         <>
           {showTutorialPreview ? (
-            // Tutorial Preview Mode - Show tutorial large
+            // Tutorial Preview Mode - Same format as recording but with tutorial as main video
             <>
-              <div className="relative w-full max-w-4xl">
+              <div className="relative w-full max-w-xl">
                 <video
                   ref={tutorialRef}
                   src={tutorialVideoUrl}
                   muted autoPlay playsInline loop
-                  className="w-full rounded-lg shadow-lg border border-white"
+                  className="w-full rounded-none bg-black"
                 />
               </div>
-              <div className="flex gap-4 mt-6">
+              <div className="flex gap-4 mt-4">
                 <Button onClick={startCountdownThenRecord} className="bg-green-600 hover:bg-green-700 px-8 py-3 text-lg">
                   🎬 Start Recording
                 </Button>
