@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import { uploadData, getUrl } from "aws-amplify/storage";
+import { uploadData, getUrl, downloadData } from "aws-amplify/storage";
 import { getCurrentUser } from "@aws-amplify/auth";
 
 export const VideoContext = createContext();
@@ -132,44 +132,34 @@ export function VideoProvider({ children }) {
   // Create a universal grid identifier that works across all browser contexts
   const UNIVERSAL_GRID_ID = 'universal-boogie-grid-v1';
 
-  // Server-based shared storage (works across all browser contexts)
+  // AWS Amplify-based shared storage (works across all users)
   const getSharedData = async (key) => {
     try {
-      // Use server API for cross-user sharing
-      if (key === SHARED_GRID_KEY) {
-        const response = await fetch('http://localhost:3001/api/shared-grid');
-        if (response.ok) {
-          const data = await response.json();
-          return data.videos || Array(16).fill(null);
-        }
-      } else if (key === SHARED_VIDEO_TAKES_KEY) {
-        const response = await fetch('http://localhost:3001/api/shared-video-takes');
-        if (response.ok) {
-          const data = await response.json();
-          return data || Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null }));
-        }
-      } else if (key === SHARED_CONTRIBUTIONS_KEY) {
-        const response = await fetch('http://localhost:3001/api/shared-contributions');
-        if (response.ok) {
-          const data = await response.json();
-          return data || [];
-        }
-      }
+      // Use AWS Amplify Storage for cross-user sharing
+      const s3Key = `shared-data/${key}.json`;
+      console.log('🔍 Getting shared data from S3:', s3Key);
       
-      // For other keys, fall back to localStorage
-      let data = localStorage.getItem(key);
-      if (!data) {
-        const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
-        localStorage.setItem(key, JSON.stringify(emptyData));
+      try {
+        const result = await downloadData({ key: s3Key });
+        const data = await result.result;
+        const text = await data.text();
+        const parsed = JSON.parse(text);
+        console.log('✅ Retrieved shared data from S3:', key, parsed);
+        return parsed;
+      } catch (s3Error) {
+        console.log('📭 No shared data found in S3, using defaults:', s3Error.message);
+        // Return default empty data
+        const emptyData = key.includes('grid') ? Array(16).fill(null) : 
+                         key.includes('takes') ? Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })) : [];
         return emptyData;
       }
-      return JSON.parse(data);
     } catch (error) {
       console.error('Error getting shared data:', error);
       // Fallback to localStorage
       let data = localStorage.getItem(key);
       if (!data) {
-        const emptyData = key.includes('grid') ? Array(16).fill(null) : [];
+        const emptyData = key.includes('grid') ? Array(16).fill(null) : 
+                         key.includes('takes') ? Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })) : [];
         localStorage.setItem(key, JSON.stringify(emptyData));
         return emptyData;
       }
@@ -179,50 +169,31 @@ export function VideoProvider({ children }) {
 
   const setSharedData = async (key, data) => {
     try {
-      // Use server API for cross-user sharing
-      if (key === SHARED_GRID_KEY) {
-        const response = await fetch('http://localhost:3001/api/shared-grid', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ videos: data })
-        });
-        if (response.ok) {
-          console.log('📊 Data saved to server:', key, data);
-          // Also save to localStorage for offline access
-          localStorage.setItem(key, JSON.stringify(data));
-          window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
-          return;
-        }
-      } else if (key === SHARED_VIDEO_TAKES_KEY) {
-        const response = await fetch('http://localhost:3001/api/shared-video-takes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ videoTakes: data })
-        });
-        if (response.ok) {
-          console.log('📊 Video takes saved to server:', key, data);
-          localStorage.setItem(key, JSON.stringify(data));
-          window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
-          return;
-        }
-      } else if (key === SHARED_CONTRIBUTIONS_KEY) {
-        const response = await fetch('http://localhost:3001/api/shared-contributions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ contributions: data })
-        });
-        if (response.ok) {
-          console.log('📊 Contributions saved to server:', key, data);
-          localStorage.setItem(key, JSON.stringify(data));
-          window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
-          return;
-        }
-      }
+      // Use AWS Amplify Storage for cross-user sharing
+      const s3Key = `shared-data/${key}.json`;
+      console.log('💾 Saving shared data to S3:', s3Key, data);
       
-      // For other keys, use localStorage
-      localStorage.setItem(key, JSON.stringify(data));
-      window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
-      console.log('📊 Data saved to localStorage:', key, data);
+      try {
+        await uploadData({
+          key: s3Key,
+          data: JSON.stringify(data),
+          options: {
+            contentType: 'application/json',
+            level: 'public' // Make it public so all users can access it
+          }
+        });
+        console.log('✅ Shared data saved to S3:', key);
+        
+        // Also save to localStorage for offline access
+        localStorage.setItem(key, JSON.stringify(data));
+        window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
+        
+      } catch (s3Error) {
+        console.error('❌ Failed to save to S3, using localStorage:', s3Error);
+        // Fallback to localStorage
+        localStorage.setItem(key, JSON.stringify(data));
+        window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
+      }
       
     } catch (error) {
       console.error('Error setting shared data:', error);
