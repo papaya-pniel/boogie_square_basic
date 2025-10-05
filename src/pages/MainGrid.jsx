@@ -3,6 +3,7 @@ import React, { useContext, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
+import AuthButton from "../components/AuthButton";
 import { uploadData, downloadData, remove } from "aws-amplify/storage";
 
 const Storage = {
@@ -263,9 +264,12 @@ export default function MainGrid() {
     );
   }
 
-  return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
-      <h1 className="text-4xl font-bold mb-8">Boogie Square</h1>
+      return (
+        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
+          <div className="flex justify-between items-center w-full max-w-4xl mb-8">
+            <h1 className="text-4xl font-bold">Boogie Square</h1>
+            <AuthButton />
+          </div>
       
       {/* Grid */}
       <div 

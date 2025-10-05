@@ -23,7 +23,13 @@
       "require_symbols": true,
       "require_uppercase": true
     },
-    "unauthenticated_identities_enabled": true
+    "unauthenticated_identities_enabled": true,
+    "social_providers": {
+      "google": {
+        "client_id": "YOUR_GOOGLE_CLIENT_ID",
+        "client_secret": "YOUR_GOOGLE_CLIENT_SECRET"
+      }
+    }
   },
   "data": {
     "url": "https://2any6xly5rhyrnkfypmvedvwqm.appsync-api.eu-west-2.amazonaws.com/graphql",

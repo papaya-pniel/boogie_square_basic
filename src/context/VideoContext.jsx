@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { uploadData, getUrl, downloadData } from "aws-amplify/storage";
-import { getCurrentUser } from "@aws-amplify/auth";
+import { getCurrentUser, signInWithRedirect, signOut } from "@aws-amplify/auth";
 
 export const VideoContext = createContext();
 
@@ -25,8 +25,14 @@ export function VideoProvider({ children }) {
         console.log('Current user loaded:', currentUser);
         setUser(currentUser);
       } catch (error) {
-        console.error('Error getting current user:', error);
-        setError('Failed to get user authentication');
+        console.log('No authenticated user, using anonymous mode');
+        // Create anonymous user for backward compatibility
+        const anonymousUser = {
+          userId: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          username: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          email: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+        };
+        setUser(anonymousUser);
       }
     };
     fetchCurrentUser();
@@ -42,8 +48,37 @@ export function VideoProvider({ children }) {
       console.log('User authentication confirmed:', currentUser.userId);
       return currentUser;
     } catch (error) {
-      console.error('Authentication check failed:', error);
-      throw new Error('Please sign in again to upload videos');
+      console.log('No authenticated user, using anonymous mode for upload');
+      // Return the current user (which might be anonymous)
+      return user;
+    }
+  };
+
+  // Google Auth functions
+  const signInWithGoogle = async () => {
+    try {
+      await signInWithRedirect({ provider: 'Google' });
+    } catch (error) {
+      console.error('Google sign in failed:', error);
+      throw error;
+    }
+  };
+
+  const signOutUser = async () => {
+    try {
+      await signOut();
+      // Create new anonymous user
+      const anonymousUser = {
+        userId: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        username: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        email: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+      };
+      setUser(anonymousUser);
+      // Reload page to reset state
+      window.location.reload();
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      throw error;
     }
   };
 
@@ -647,7 +682,9 @@ export function VideoProvider({ children }) {
       userContributions,
       clearSharedGrid,
       forceSyncFromShared,
-      syncUserAcrossContexts
+      syncUserAcrossContexts,
+      signInWithGoogle,
+      signOutUser
     }}>
       {children}
     </VideoContext.Provider>
