@@ -107,7 +107,63 @@ export default function MainGrid() {
     };
   }, [videoTakes, currentTake, getS3VideoUrl]);
 
-  const paddedVideos = [...videoUrls];
+  // Separate effect to fetch URLs for all takes when not in synchronized playback
+  const [allVideoUrls, setAllVideoUrls] = useState([]);
+  
+  useEffect(() => {
+    let isMounted = true;
+    
+    async function fetchAllVideoUrls() {
+      if (isPlaying) return; // Skip if in synchronized playback mode
+      
+      try {
+        console.log('🔄 MainGrid: Fetching URLs for all takes (not in sync mode)');
+        
+        const urls = await Promise.all(
+          videoTakes.map(async (takes, index) => {
+            if (!takes || (!takes.take1 && !takes.take2 && !takes.take3)) {
+              return null;
+            }
+            
+            // Use take1 as the default display when not in sync mode
+            const displayTake = takes.take1 || takes.take2 || takes.take3;
+            
+            try {
+              const url = await getS3VideoUrl(displayTake);
+              const response = await fetch(url, { method: 'HEAD' });
+              if (response.ok) {
+                return url;
+              } else {
+                return null;
+              }
+            } catch (error) {
+              console.error(`❌ MainGrid: Error fetching video URL for index ${index}:`, error);
+              return null;
+            }
+          })
+        );
+        
+        if (isMounted) {
+          setAllVideoUrls(urls);
+        }
+      } catch (error) {
+        console.error('❌ MainGrid: Error fetching all video URLs:', error);
+        if (isMounted) {
+          setAllVideoUrls([]);
+        }
+      }
+    }
+    
+    fetchAllVideoUrls();
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [videoTakes, isPlaying, getS3VideoUrl]);
+
+  // Use different video sources based on playback state
+  const displayVideos = isPlaying ? videoUrls : allVideoUrls;
+  const paddedVideos = [...displayVideos];
   while (paddedVideos.length < totalSlots) paddedVideos.push(null);
 
   // Synchronized playback functions
@@ -279,19 +335,25 @@ export default function MainGrid() {
               onClick={() => handleSlotClick(idx)}
               className={`relative flex items-center justify-center bg-black border border-gray-300 ${getSlotStyle(idx)}`}
             >
-              {hasCurrentTake ? (
+              {hasAnyRecording ? (
                 <>
                   {/* Show the actual recorded video */}
-                  <video
-                    src={src}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover z-0"
-                  />
+                  {src ? (
+                    <video
+                      src={src}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="absolute inset-0 w-full h-full object-cover z-0"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 bg-gray-800 flex items-center justify-center z-0">
+                      <div className="text-4xl text-gray-400">📹</div>
+                    </div>
+                  )}
                   {/* Lock overlay for other users' recordings */}
-                  {!hasUserContribution && hasAnyRecording && (
+                  {!hasUserContribution && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
                       <div className="text-6xl text-red-400">🔒</div>
                     </div>
