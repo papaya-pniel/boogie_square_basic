@@ -31,8 +31,8 @@ export default function MainGrid() {
   const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
   const [gridReady, setGridReady] = useState(false);
 
-  // Synchronized playback state
-  const [isPlaying, setIsPlaying] = useState(false);
+  // Synchronized playback state - always playing
+  const [isPlaying, setIsPlaying] = useState(true);
   const [currentTake, setCurrentTake] = useState(1); // 1, 2, or 3
   const [playbackInterval, setPlaybackInterval] = useState(null);
 
@@ -107,71 +107,14 @@ export default function MainGrid() {
     };
   }, [videoTakes, currentTake, getS3VideoUrl]);
 
-  // Separate effect to fetch URLs for all takes when not in synchronized playback
-  const [allVideoUrls, setAllVideoUrls] = useState([]);
-  
-  useEffect(() => {
-    let isMounted = true;
-    
-    async function fetchAllVideoUrls() {
-      if (isPlaying) return; // Skip if in synchronized playback mode
-      
-      try {
-        console.log('🔄 MainGrid: Fetching URLs for all takes (not in sync mode)');
-        
-        const urls = await Promise.all(
-          videoTakes.map(async (takes, index) => {
-            if (!takes || (!takes.take1 && !takes.take2 && !takes.take3)) {
-              return null;
-            }
-            
-            // Use take1 as the default display when not in sync mode
-            const displayTake = takes.take1 || takes.take2 || takes.take3;
-            
-            try {
-              const url = await getS3VideoUrl(displayTake);
-              const response = await fetch(url, { method: 'HEAD' });
-              if (response.ok) {
-                return url;
-              } else {
-                return null;
-              }
-            } catch (error) {
-              console.error(`❌ MainGrid: Error fetching video URL for index ${index}:`, error);
-              return null;
-            }
-          })
-        );
-        
-        if (isMounted) {
-          setAllVideoUrls(urls);
-        }
-      } catch (error) {
-        console.error('❌ MainGrid: Error fetching all video URLs:', error);
-        if (isMounted) {
-          setAllVideoUrls([]);
-        }
-      }
-    }
-    
-    fetchAllVideoUrls();
-    
-    return () => {
-      isMounted = false;
-    };
-  }, [videoTakes, isPlaying, getS3VideoUrl]);
 
-  // Use different video sources based on playback state
-  const displayVideos = isPlaying ? videoUrls : allVideoUrls;
-  const paddedVideos = [...displayVideos];
+  // Always use synchronized video sources
+  const paddedVideos = [...videoUrls];
   while (paddedVideos.length < totalSlots) paddedVideos.push(null);
 
-  // Synchronized playback functions
-  const startSynchronizedPlayback = () => {
-    if (isPlaying) return;
-    
+  // Initialize synchronized playback on mount
+  useEffect(() => {
     console.log('🎬 Starting synchronized playback');
-    setIsPlaying(true);
     setCurrentTake(1);
     
     // Cycle through takes every 3 seconds
@@ -184,30 +127,15 @@ export default function MainGrid() {
     }, 3000); // 3 seconds per take
     
     setPlaybackInterval(interval);
-  };
-
-  const stopSynchronizedPlayback = () => {
-    if (!isPlaying) return;
     
-    console.log('⏹️ Stopping synchronized playback');
-    setIsPlaying(false);
-    
-    if (playbackInterval) {
-      clearInterval(playbackInterval);
-      setPlaybackInterval(null);
-    }
-    
-    setCurrentTake(1); // Reset to take 1
-  };
-
-  // Cleanup interval on unmount
-  useEffect(() => {
+    // Cleanup on unmount
     return () => {
-      if (playbackInterval) {
-        clearInterval(playbackInterval);
+      if (interval) {
+        clearInterval(interval);
       }
     };
-  }, [playbackInterval]);
+  }, []);
+
 
   useEffect(() => {
     if (audioRef.current) {
@@ -338,7 +266,7 @@ export default function MainGrid() {
               {hasAnyRecording ? (
                 <>
                   {/* Show the actual recorded video */}
-                  {src ? (
+                  {src && (
                     <video
                       src={src}
                       autoPlay
@@ -347,20 +275,16 @@ export default function MainGrid() {
                       playsInline
                       className="absolute inset-0 w-full h-full object-cover z-0"
                     />
-                  ) : (
-                    <div className="absolute inset-0 bg-gray-800 flex items-center justify-center z-0">
-                      <div className="text-4xl text-gray-400">📹</div>
-                    </div>
                   )}
                   {/* Lock overlay for other users' recordings */}
                   {!hasUserContribution && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
-                      <div className="text-6xl text-red-400">🔒</div>
+                    <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                      <div className="text-4xl text-red-400 bg-black/30 rounded-full p-2 backdrop-blur-sm">🔒</div>
                     </div>
                   )}
                   {/* User's own recording indicator */}
                   {hasUserContribution && (
-                    <div className="absolute top-1 right-1 bg-green-500 text-white text-xs px-1 rounded z-20">
+                    <div className="absolute top-1 right-1 bg-green-500/80 text-white text-xs px-1 rounded z-20 backdrop-blur-sm">
                       ✓
                     </div>
                   )}
@@ -369,7 +293,7 @@ export default function MainGrid() {
                 <>
                   {/* Tutorial video looping in background for available slots */}
                   <video
-                    src={getTutorialSrc(0, idx)}
+                    src={getTutorialSrc(currentTake - 1, idx)}
                     autoPlay
                     muted
                     loop
@@ -386,38 +310,20 @@ export default function MainGrid() {
       </div>
 
 
-      {/* Synchronized Playback Controls */}
+      {/* Synchronized Playback Status */}
       <div className="flex flex-col items-center gap-4 mt-8">
         {/* Playback Status */}
-        {isPlaying && (
-          <div className="text-center">
-            <div className="text-2xl font-bold text-cyan-400 mb-2">
-              🎬 Take {currentTake} Playing
-            </div>
-            <div className="text-sm text-gray-400">
-              All squares showing Take {currentTake} videos
-            </div>
+        <div className="text-center">
+          <div className="text-2xl font-bold text-cyan-400 mb-2">
+            🎬 Take {currentTake} Playing
           </div>
-        )}
+          <div className="text-sm text-gray-400">
+            All squares showing Take {currentTake} videos
+          </div>
+        </div>
         
-        {/* Playback Controls */}
+        {/* Controls */}
         <div className="flex gap-4">
-          {!isPlaying ? (
-            <Button
-              onClick={startSynchronizedPlayback}
-              className="bg-green-600 hover:bg-green-700 px-6 py-3"
-            >
-              🎬 Start Synchronized Playback
-            </Button>
-          ) : (
-            <Button
-              onClick={stopSynchronizedPlayback}
-              className="bg-red-600 hover:bg-red-700 px-6 py-3"
-            >
-              ⏹️ Stop Playback
-            </Button>
-          )}
-          
           <Button
             onClick={async () => {
               if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
@@ -433,17 +339,10 @@ export default function MainGrid() {
         
         {/* Instructions */}
         <div className="text-center text-sm text-gray-400 max-w-md">
-          {!isPlaying ? (
-            <p>
-              💡 Click "Start Synchronized Playback" to see all recorded videos play together! 
-              Takes will cycle every 3 seconds: Take 1 → Take 2 → Take 3 → repeat.
-            </p>
-          ) : (
-            <p>
-              🎵 All squares are now playing Take {currentTake} videos in sync. 
-              The takes will automatically cycle every 3 seconds.
-            </p>
-          )}
+          <p>
+            🎵 All squares are playing Take {currentTake} videos in sync. 
+            The takes automatically cycle every 3 seconds: Take 1 → Take 2 → Take 3 → repeat.
+          </p>
         </div>
       </div>
 
