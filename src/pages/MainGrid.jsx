@@ -22,10 +22,11 @@ export default function MainGrid() {
     updateVideoAtIndex, 
     isLoading, 
     getS3VideoUrl, 
-    canContributeToPosition, 
-    userContributions,
-    clearSharedGrid,
-    user 
+        canContributeToPosition,
+        userContributions,
+        clearSharedGrid,
+        forceSyncFromShared,
+        user
   } = useContext(VideoContext);
   const [selectedSong, setSelectedSong] = useState("none.mp3");
   const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
@@ -352,20 +353,29 @@ export default function MainGrid() {
           </div>
         </div>
         
-        {/* Controls */}
-        <div className="flex gap-4">
-          <Button
-            onClick={async () => {
-              if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
-                await clearSharedGrid();
-                window.location.reload();
-              }
-            }}
-            className="bg-gray-600 hover:bg-gray-700 px-6 py-3"
-          >
-            🗑️ Clear Grid (Testing)
-          </Button>
-        </div>
+            {/* Controls */}
+            <div className="flex gap-4">
+              <Button
+                onClick={async () => {
+                  if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
+                    await clearSharedGrid();
+                    window.location.reload();
+                  }
+                }}
+                className="bg-gray-600 hover:bg-gray-700 px-6 py-3"
+              >
+                🗑️ Clear Grid (Testing)
+              </Button>
+              <Button
+                onClick={async () => {
+                  console.log('🔄 Manual sync triggered by user');
+                  await forceSyncFromShared();
+                }}
+                className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
+              >
+                🔄 Force Sync
+              </Button>
+            </div>
         
         {/* Instructions */}
         <div className="text-center text-sm text-gray-400 max-w-md">

@@ -137,17 +137,21 @@ export function VideoProvider({ children }) {
     try {
       // Use AWS Amplify Storage for cross-user sharing
       const s3Key = `shared-data/${key}.json`;
-      console.log('🔍 Getting shared data from S3:', s3Key);
+      console.log('🔍 Getting shared data from S3:', s3Key, 'for user:', userEmail);
       
       try {
-        const result = await downloadData({ key: s3Key });
+        const result = await downloadData({ 
+          key: s3Key,
+          options: { level: 'public' }
+        });
         const data = await result.result;
         const text = await data.text();
         const parsed = JSON.parse(text);
-        console.log('✅ Retrieved shared data from S3:', key, parsed);
+        console.log('✅ Retrieved shared data from S3:', key, 'data:', parsed);
         return parsed;
       } catch (s3Error) {
         console.log('📭 No shared data found in S3, using defaults:', s3Error.message);
+        console.log('📭 S3 Error details:', s3Error);
         // Return default empty data
         const emptyData = key.includes('grid') ? Array(16).fill(null) : 
                          key.includes('takes') ? Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })) : [];
@@ -171,7 +175,7 @@ export function VideoProvider({ children }) {
     try {
       // Use AWS Amplify Storage for cross-user sharing
       const s3Key = `shared-data/${key}.json`;
-      console.log('💾 Saving shared data to S3:', s3Key, data);
+      console.log('💾 Saving shared data to S3:', s3Key, 'data:', data, 'for user:', userEmail);
       
       try {
         await uploadData({
@@ -182,7 +186,7 @@ export function VideoProvider({ children }) {
             level: 'public' // Make it public so all users can access it
           }
         });
-        console.log('✅ Shared data saved to S3:', key);
+        console.log('✅ Shared data saved to S3 successfully:', key);
         
         // Also save to localStorage for offline access
         localStorage.setItem(key, JSON.stringify(data));
@@ -190,6 +194,7 @@ export function VideoProvider({ children }) {
         
       } catch (s3Error) {
         console.error('❌ Failed to save to S3, using localStorage:', s3Error);
+        console.error('❌ S3 Error details:', s3Error);
         // Fallback to localStorage
         localStorage.setItem(key, JSON.stringify(data));
         window.dispatchEvent(new CustomEvent('shared-grid-update', { detail: { key, data } }));
@@ -570,6 +575,36 @@ export function VideoProvider({ children }) {
     console.log('Shared grid cleared');
   };
 
+  // Helper function to force sync from shared storage (for debugging)
+  const forceSyncFromShared = async () => {
+    try {
+      console.log('🔄 Force syncing from shared storage...');
+      const sharedVideos = await getSharedData(SHARED_GRID_KEY);
+      const sharedVideoTakes = await getSharedData(SHARED_VIDEO_TAKES_KEY);
+      const sharedContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      
+      console.log('🔄 Synced videos:', sharedVideos);
+      console.log('🔄 Synced video takes:', sharedVideoTakes);
+      console.log('🔄 Synced contributions:', sharedContributions);
+      
+      setVideos(sharedVideos);
+      setVideoTakes(sharedVideoTakes);
+      
+      // Update user contributions
+      const userContribs = new Set();
+      sharedContributions.forEach(contrib => {
+        if (contrib.userEmail === userEmail) {
+          userContribs.add(contrib.position);
+        }
+      });
+      setUserContributions(userContribs);
+      
+      console.log('✅ Force sync completed');
+    } catch (error) {
+      console.error('❌ Force sync failed:', error);
+    }
+  };
+
   // Helper function to sync user data across browser contexts
   const syncUserAcrossContexts = async (targetUserEmail) => {
     try {
@@ -604,6 +639,7 @@ export function VideoProvider({ children }) {
       canContributeToPosition,
       userContributions,
       clearSharedGrid,
+      forceSyncFromShared,
       syncUserAcrossContexts
     }}>
       {children}
