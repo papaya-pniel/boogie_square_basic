@@ -389,6 +389,28 @@ export default function RecordPage() {
                   muted autoPlay playsInline loop
                   className="absolute top-4 right-4 w-40 h-28 rounded-none shadow border border-white z-10"
                 />
+                {/* Silhouette overlay to guide positioning */}
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                  <div className="relative">
+                    {/* Main body silhouette */}
+                    <div className="w-32 h-48 bg-white/20 border-2 border-white/40 rounded-lg relative">
+                      {/* Head */}
+                      <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 w-12 h-12 bg-white/20 border-2 border-white/40 rounded-full"></div>
+                      {/* Arms */}
+                      <div className="absolute top-8 -left-6 w-8 h-16 bg-white/20 border-2 border-white/40 rounded-full transform -rotate-12"></div>
+                      <div className="absolute top-8 -right-6 w-8 h-16 bg-white/20 border-2 border-white/40 rounded-full transform rotate-12"></div>
+                      {/* Legs */}
+                      <div className="absolute bottom-0 left-4 w-6 h-20 bg-white/20 border-2 border-white/40 rounded-full"></div>
+                      <div className="absolute bottom-0 right-4 w-6 h-20 bg-white/20 border-2 border-white/40 rounded-full"></div>
+                    </div>
+                    {/* Position guide text */}
+                    <div className="absolute -bottom-12 left-1/2 transform -translate-x-1/2 text-center">
+                      <div className="text-white/80 text-sm font-medium bg-black/50 px-3 py-1 rounded">
+                        Position yourself here
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="flex gap-4 mt-4">
                 <Button onClick={startCountdownThenRecord} className="bg-red-600 hover:bg-red-700 px-8 py-3 text-lg">
@@ -426,6 +448,7 @@ export default function RecordPage() {
                     <div className="text-6xl font-bold animate-pulse">{countdown}</div>
                   </div>
                 )}
+                {/* No silhouette overlay during recording */}
               </div>
               <div className="flex gap-4 mt-4">
                 <Button onClick={startCountdownThenRecord} disabled={recording || countdown !== null}>Start Recording</Button>
