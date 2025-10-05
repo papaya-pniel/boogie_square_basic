@@ -46,6 +46,7 @@ export default function RecordPage() {
   const [step, setStep] = useState(0); // 0..2
   const [clips, setClips] = useState([]); // Blob[] of each take
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [showTutorialPreview, setShowTutorialPreview] = useState(true); // New state for tutorial preview mode
 
   const videoRef = useRef(null);
   const tutorialRef = useRef(null);
@@ -119,6 +120,8 @@ export default function RecordPage() {
   };
 
   const startCountdownThenRecord = () => {
+    // Switch from tutorial preview to recording mode
+    setShowTutorialPreview(false);
     tutorialRef.current?.pause();
     setCountdown(3);
     let current = 3;
@@ -138,6 +141,7 @@ export default function RecordPage() {
       if (step < 2) {
         setStep(step + 1);
         setPreviewUrl(null);
+        setShowTutorialPreview(true); // Show tutorial preview for next take
         return;
       }
       if (clips.length !== 3) {
@@ -318,6 +322,7 @@ export default function RecordPage() {
     if (clips.length > 0) setClips((prev) => prev.slice(0, -1));
     setPreviewUrl(null);
     setRecording(false);
+    setShowTutorialPreview(true); // Show tutorial preview again
     stopTimerRef.current && clearTimeout(stopTimerRef.current);
     stopTimerRef.current = null;
   };
@@ -328,24 +333,53 @@ export default function RecordPage() {
 
       {!previewUrl ? (
         <>
-          <div className="relative w-full max-w-xl">
-            <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-none bg-black" />
-            <video
-              ref={tutorialRef}
-              src={tutorialVideoUrl}
-              muted autoPlay playsInline loop
-              className="absolute top-4 right-4 w-40 h-28 rounded-none shadow border border-white z-10"
-            />
-            {countdown !== null && (
-              <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60">
-                <div className="text-6xl font-bold animate-pulse">{countdown}</div>
+          {showTutorialPreview ? (
+            // Tutorial Preview Mode - Show tutorial large
+            <>
+              <div className="relative w-full max-w-4xl">
+                <video
+                  ref={tutorialRef}
+                  src={tutorialVideoUrl}
+                  muted autoPlay playsInline loop
+                  className="w-full rounded-lg shadow-lg border border-white"
+                />
               </div>
-            )}
-          </div>
-          <div className="flex gap-4 mt-4">
-            <Button onClick={startCountdownThenRecord} disabled={recording || countdown !== null}>Start Recording</Button>
-            <Button onClick={() => mediaRecorderRef.current?.stop()} disabled={!recording}>Stop</Button>
-          </div>
+              <div className="flex gap-4 mt-6">
+                <Button onClick={startCountdownThenRecord} className="bg-green-600 hover:bg-green-700 px-8 py-3 text-lg">
+                  🎬 Start Recording
+                </Button>
+                <Button variant="secondary" onClick={() => navigate('/')} className="px-6 py-3">
+                  ← Back to Grid
+                </Button>
+              </div>
+              <div className="text-center mt-4 text-gray-300">
+                <p>Watch the tutorial above, then click "Start Recording" when ready!</p>
+                <p className="text-sm text-gray-400 mt-2">Take {step + 1} of 3</p>
+              </div>
+            </>
+          ) : (
+            // Recording Mode - Show camera with tutorial in corner
+            <>
+              <div className="relative w-full max-w-xl">
+                <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-none bg-black" />
+                <video
+                  ref={tutorialRef}
+                  src={tutorialVideoUrl}
+                  muted autoPlay playsInline loop
+                  className="absolute top-4 right-4 w-40 h-28 rounded-none shadow border border-white z-10"
+                />
+                {countdown !== null && (
+                  <div className="absolute inset-0 flex items-center justify-center z-50 bg-black/60">
+                    <div className="text-6xl font-bold animate-pulse">{countdown}</div>
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-4 mt-4">
+                <Button onClick={startCountdownThenRecord} disabled={recording || countdown !== null}>Start Recording</Button>
+                <Button onClick={() => mediaRecorderRef.current?.stop()} disabled={!recording}>Stop</Button>
+              </div>
+            </>
+          )}
         </>
       ) : step === 3 ? (
         // Preview merged video step
@@ -376,6 +410,7 @@ export default function RecordPage() {
               setPreviewUrl(null);
               setStep(0);
               setClips([]);
+              setShowTutorialPreview(true);
             }} disabled={isUploading}>
               🔄 Start Over
             </Button>
