@@ -39,73 +39,81 @@ export default function MainGrid() {
   const audioRef = useRef();
   const totalSlots = 16; // Always 16 squares
   const [videoUrls, setVideoUrls] = useState([]);
+  const [allTakeUrls, setAllTakeUrls] = useState([]); // Store URLs for all takes
 
+  // Preload all takes for seamless transitions
   useEffect(() => {
     let isMounted = true;
     
-    async function fetchVideoUrls() {
+    async function preloadAllTakes() {
       try {
-        console.log('🔄 MainGrid: Fetching video URLs for current take:', currentTake);
-        console.log('🔄 MainGrid: VideoTakes data:', videoTakes);
+        console.log('🔄 MainGrid: Preloading all takes for seamless transitions');
         
-        const urls = await Promise.all(
+        const allUrls = await Promise.all(
           videoTakes.map(async (takes, index) => {
             if (!takes || (!takes.take1 && !takes.take2 && !takes.take3)) {
-              console.log(`📭 MainGrid: No takes at index ${index}`);
-              return null;
+              return { take1: null, take2: null, take3: null };
             }
             
-            // Get the current take based on currentTake state
-            const currentTakeKey = `take${currentTake}`;
-            const currentTakeVideo = takes[currentTakeKey];
+            const takeUrls = { take1: null, take2: null, take3: null };
             
-            if (!currentTakeVideo) {
-              console.log(`📭 MainGrid: No take ${currentTake} at index ${index}`);
-              return null;
-            }
-            
-            try {
-              console.log(`🎥 MainGrid: Processing take ${currentTake} at index ${index}:`, currentTakeVideo);
-              const url = await getS3VideoUrl(currentTakeVideo);
-              console.log(`🔗 MainGrid: Got URL for take ${currentTake} at index ${index}:`, url);
+            // Preload all takes for this slot
+            for (let takeNum = 1; takeNum <= 3; takeNum++) {
+              const takeKey = `take${takeNum}`;
+              const takeVideo = takes[takeKey];
               
-              // Test if the URL is accessible
-              const response = await fetch(url, { method: 'HEAD' });
-              if (response.ok) {
-                console.log(`✅ MainGrid: Video URL accessible for take ${currentTake} at index ${index}`);
-                return url;
-              } else {
-                console.warn(`❌ MainGrid: Video URL not accessible for take ${currentTake} at index ${index}:`, url);
-                return null;
+              if (takeVideo) {
+                try {
+                  const url = await getS3VideoUrl(takeVideo);
+                  const response = await fetch(url, { method: 'HEAD' });
+                  if (response.ok) {
+                    takeUrls[takeKey] = url;
+                    console.log(`✅ Preloaded take ${takeNum} for slot ${index}`);
+                  }
+                } catch (error) {
+                  console.error(`❌ Error preloading take ${takeNum} for slot ${index}:`, error);
+                }
               }
-            } catch (error) {
-              console.error(`❌ MainGrid: Error fetching video URL for take ${currentTake} at index ${index}:`, error);
-              return null;
             }
+            
+            return takeUrls;
           })
         );
         
-        console.log('📋 MainGrid: Final video URLs for take', currentTake, ':', urls);
-        
-        // Only update state if component is still mounted
         if (isMounted) {
-          setVideoUrls(urls);
+          setAllTakeUrls(allUrls);
+          console.log('📋 All takes preloaded successfully');
         }
       } catch (error) {
-        console.error('❌ MainGrid: Error fetching video URLs:', error);
-        if (isMounted) {
-          setVideoUrls([]);
-        }
+        console.error('❌ MainGrid: Error preloading takes:', error);
       }
     }
     
-    fetchVideoUrls();
+    preloadAllTakes();
     
-    // Cleanup function to prevent state updates after unmount
     return () => {
       isMounted = false;
     };
-  }, [videoTakes, currentTake, getS3VideoUrl]);
+  }, [videoTakes, getS3VideoUrl]);
+
+  // Update current take URLs from preloaded data
+  useEffect(() => {
+    console.log('🔄 Updating video URLs for current take:', currentTake);
+    console.log('🔄 allTakeUrls:', allTakeUrls);
+    
+    const currentUrls = allTakeUrls.map((slotTakes, index) => {
+      if (!slotTakes) {
+        console.log(`📭 Slot ${index}: No slotTakes`);
+        return null;
+      }
+      const url = slotTakes[`take${currentTake}`] || null;
+      console.log(`🎥 Slot ${index} take${currentTake}:`, url);
+      return url;
+    });
+    
+    console.log('📋 Final currentUrls:', currentUrls);
+    setVideoUrls(currentUrls);
+  }, [allTakeUrls, currentTake]);
 
 
   // Always use synchronized video sources
@@ -117,14 +125,14 @@ export default function MainGrid() {
     console.log('🎬 Starting synchronized playback');
     setCurrentTake(1);
     
-    // Cycle through takes every 3 seconds
+    // Cycle through takes every 4 seconds
     const interval = setInterval(() => {
       setCurrentTake(prevTake => {
         const nextTake = prevTake === 3 ? 1 : prevTake + 1;
         console.log(`🎬 Switching to take ${nextTake}`);
         return nextTake;
       });
-    }, 3000); // 3 seconds per take
+    }, 4000); // 4 seconds per take
     
     setPlaybackInterval(interval);
     
@@ -257,6 +265,13 @@ export default function MainGrid() {
           const hasAnyRecording = videoTakes[idx] && (videoTakes[idx].take1 || videoTakes[idx].take2 || videoTakes[idx].take3);
           const hasCurrentTake = src !== null;
           
+          // Debug logging
+          if (hasAnyRecording) {
+            console.log(`🎥 Slot ${idx}: hasAnyRecording=${hasAnyRecording}, hasCurrentTake=${hasCurrentTake}, src=${src}, currentTake=${currentTake}`);
+            console.log(`🎥 Slot ${idx} videoTakes:`, videoTakes[idx]);
+            console.log(`🎥 Slot ${idx} allTakeUrls:`, allTakeUrls[idx]);
+          }
+          
           return (
             <div
               key={idx}
@@ -268,12 +283,14 @@ export default function MainGrid() {
                   {/* Show the actual recorded video */}
                   {src && (
                     <video
+                      key={`${idx}-${currentTake}`}
                       src={src}
                       autoPlay
                       muted
                       loop
                       playsInline
-                      className="absolute inset-0 w-full h-full object-cover z-0"
+                      className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-200"
+                      style={{ opacity: 1 }}
                     />
                   )}
                   {/* User's own recording indicator */}
@@ -287,12 +304,14 @@ export default function MainGrid() {
                 <>
                   {/* Tutorial video looping in background for available slots */}
                   <video
+                    key={`tutorial-${idx}-${currentTake}`}
                     src={getTutorialSrc(currentTake - 1, idx)}
                     autoPlay
                     muted
                     loop
                     playsInline
-                    className="absolute inset-0 w-full h-full object-cover opacity-40 z-0"
+                    className="absolute inset-0 w-full h-full object-cover opacity-40 z-0 transition-opacity duration-200"
+                    style={{ opacity: 0.4 }}
                   />
                   {/* Plus icon overlay */}
                   <div className="text-6xl text-cyan-400 z-10 relative">+</div>
@@ -335,7 +354,7 @@ export default function MainGrid() {
         <div className="text-center text-sm text-gray-400 max-w-md">
           <p>
             🎵 All squares are playing Take {currentTake} videos in sync. 
-            The takes automatically cycle every 3 seconds: Take 1 → Take 2 → Take 3 → repeat.
+            The takes automatically cycle every 4 seconds: Take 1 → Take 2 → Take 3 → repeat.
           </p>
         </div>
       </div>
