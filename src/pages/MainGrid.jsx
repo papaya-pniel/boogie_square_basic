@@ -132,21 +132,27 @@ export default function MainGrid() {
   }, [paddedVideos]);
 
   const handleSlotClick = (index) => {
+    const hasRecording = paddedVideos[index] !== null;
+    const hasUserContribution = userContributions.has(index);
+    
+    // Don't allow clicking on slots with recordings from other users
+    if (hasRecording && !hasUserContribution) return;
+    
     if (!canContributeToPosition(index)) return;
     navigate(`/record/${index}`);
   };
 
-  const handlePlaybackClick = (index) => {
-    navigate(`/playback/${index}`);
-  };
 
   const getSlotStyle = (index) => {
     const hasUserContribution = userContributions.has(index);
+    const hasRecording = paddedVideos[index] !== null;
     
     if (hasUserContribution) {
-      return "bg-green-500/20 border-green-400"; // User's contribution - green background
+      return "bg-green-500/20 border-green-400 cursor-pointer hover:bg-green-500/30"; // User's contribution - green background
+    } else if (hasRecording) {
+      return "bg-red-500/20 border-red-400 cursor-not-allowed"; // Someone else's recording - red background, no interaction
     } else {
-      return "cursor-pointer hover:bg-gray-900"; // Default styling for other slots
+      return "cursor-pointer hover:bg-gray-900"; // Available slot - default styling
     }
   };
 
@@ -188,32 +194,63 @@ export default function MainGrid() {
           height: "400px"
         }}
       >
-        {paddedVideos.map((src, idx) => (
-          <div
-            key={idx}
-            onClick={() => handleSlotClick(idx)}
-            className={`relative flex items-center justify-center bg-black border border-gray-300 ${getSlotStyle(idx)}`}
-          >
-            {src ? (
-              // Show lock icon for recorded slots
-              <div className="text-6xl text-cyan-400">🔒</div>
-            ) : (
-              // Show plus icon for empty slots
-              <div className="text-6xl text-cyan-400">+</div>
-            )}
-          </div>
-        ))}
+        {paddedVideos.map((src, idx) => {
+          const hasUserContribution = userContributions.has(idx);
+          const hasRecording = src !== null;
+          
+          return (
+            <div
+              key={idx}
+              onClick={() => handleSlotClick(idx)}
+              className={`relative flex items-center justify-center bg-black border border-gray-300 ${getSlotStyle(idx)}`}
+            >
+              {hasRecording ? (
+                <>
+                  {/* Show the actual recorded video */}
+                  <video
+                    src={src}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-cover z-0"
+                  />
+                  {/* Lock overlay for other users' recordings */}
+                  {!hasUserContribution && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-20">
+                      <div className="text-6xl text-red-400">🔒</div>
+                    </div>
+                  )}
+                  {/* User's own recording indicator */}
+                  {hasUserContribution && (
+                    <div className="absolute top-1 right-1 bg-green-500 text-white text-xs px-1 rounded z-20">
+                      ✓
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {/* Tutorial video looping in background for available slots */}
+                  <video
+                    src={getTutorialSrc(0, idx)}
+                    autoPlay
+                    muted
+                    loop
+                    playsInline
+                    className="absolute inset-0 w-full h-full object-cover opacity-40 z-0"
+                  />
+                  {/* Plus icon overlay */}
+                  <div className="text-6xl text-cyan-400 z-10 relative">+</div>
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
 
-      {/* Playback Controls */}
+      {/* Controls */}
       <div className="flex justify-center gap-4 mt-8">
-        <Button
-          onClick={() => handlePlaybackClick(0)}
-          className="bg-purple-600 hover:bg-purple-700 px-6 py-3"
-        >
-          🎬 View Synchronized Playback
-        </Button>
         <Button
           onClick={async () => {
             if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {

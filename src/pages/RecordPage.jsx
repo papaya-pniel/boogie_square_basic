@@ -173,8 +173,8 @@ export default function RecordPage() {
       const mergedUrl = URL.createObjectURL(mergedBlob);
       
       await updateVideoAtIndex(slotToUpdate, mergedUrl);
-      // Navigate to the new synchronized playback page
-      navigate(`/playback/${slotToUpdate}`);
+      // Navigate back to the main grid
+      navigate('/');
     } catch (e) {
       console.error(e);
       setUploadError('Failed to save video. Please try again.');
@@ -361,7 +361,7 @@ export default function RecordPage() {
           
           <div className="flex gap-4 mt-6">
             <Button onClick={handleSaveMergedVideo} disabled={isUploading} className="bg-green-600 hover:bg-green-700">
-              🎬 View Synchronized Playback
+              ✅ Save & Return to Grid
             </Button>
             <Button variant="secondary" onClick={() => {
               setPreviewUrl(null);
