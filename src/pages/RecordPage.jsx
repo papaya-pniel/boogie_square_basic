@@ -47,6 +47,7 @@ export default function RecordPage() {
   const [clips, setClips] = useState([]); // Blob[] of each take
   const [previewUrl, setPreviewUrl] = useState(null);
   const [showTutorialPreview, setShowTutorialPreview] = useState(true); // New state for tutorial preview mode
+  const [showReadyToRecord, setShowReadyToRecord] = useState(false); // New state for ready to record screen
 
   const videoRef = useRef(null);
   const tutorialRef = useRef(null);
@@ -85,9 +86,8 @@ export default function RecordPage() {
   };
 
   const startRecording = async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 360, frameRate: 30 }, audio: { sampleRate: 48000 } });
-    streamRef.current = stream;
-    videoRef.current.srcObject = stream;
+    // Camera stream is already set up in readyToRecord()
+    const stream = streamRef.current;
 
     const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus') ? 'video/webm;codecs=vp8,opus' : 'video/webm';
     const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 800_000, audioBitsPerSecond: 96_000 });
@@ -119,9 +119,23 @@ export default function RecordPage() {
     }
   };
 
-  const startCountdownThenRecord = () => {
-    // Switch from tutorial preview to recording mode
+  const readyToRecord = async () => {
+    // Switch from tutorial preview to ready to record screen
     setShowTutorialPreview(false);
+    setShowReadyToRecord(true);
+    
+    // Start camera stream
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+      video: { width: 640, height: 360, frameRate: 30 }, 
+      audio: { sampleRate: 48000 } 
+    });
+    streamRef.current = stream;
+    videoRef.current.srcObject = stream;
+  };
+
+  const startCountdownThenRecord = () => {
+    // Switch from ready to record to actual recording mode
+    setShowReadyToRecord(false);
     tutorialRef.current?.pause();
     setCountdown(3);
     let current = 3;
@@ -142,6 +156,7 @@ export default function RecordPage() {
         setStep(step + 1);
         setPreviewUrl(null);
         setShowTutorialPreview(true); // Show tutorial preview for next take
+        setShowReadyToRecord(false);
         return;
       }
       if (clips.length !== 3) {
@@ -323,6 +338,12 @@ export default function RecordPage() {
     setPreviewUrl(null);
     setRecording(false);
     setShowTutorialPreview(true); // Show tutorial preview again
+    setShowReadyToRecord(false);
+    // Stop camera stream if it's running
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
     stopTimerRef.current && clearTimeout(stopTimerRef.current);
     stopTimerRef.current = null;
   };
@@ -345,20 +366,52 @@ export default function RecordPage() {
                 />
               </div>
               <div className="flex gap-4 mt-4">
-                <Button onClick={startCountdownThenRecord} className="bg-green-600 hover:bg-green-700 px-8 py-3 text-lg">
-                  🎬 Start Recording
+                <Button onClick={readyToRecord} className="bg-green-600 hover:bg-green-700 px-8 py-3 text-lg">
+                  🎬 Ready to Record
                 </Button>
                 <Button variant="secondary" onClick={() => navigate('/')} className="px-6 py-3">
                   ← Back to Grid
                 </Button>
               </div>
               <div className="text-center mt-4 text-gray-300">
-                <p>Watch the tutorial above, then click "Start Recording" when ready!</p>
+                <p>Watch the tutorial above, then click "Ready to Record" when ready!</p>
+                <p className="text-sm text-gray-400 mt-2">Take {step + 1} of 3</p>
+              </div>
+            </>
+          ) : showReadyToRecord ? (
+            // Ready to Record Mode - Show camera with tutorial in corner, no recording yet
+            <>
+              <div className="relative w-full max-w-xl">
+                <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-none bg-black" />
+                <video
+                  ref={tutorialRef}
+                  src={tutorialVideoUrl}
+                  muted autoPlay playsInline loop
+                  className="absolute top-4 right-4 w-40 h-28 rounded-none shadow border border-white z-10"
+                />
+              </div>
+              <div className="flex gap-4 mt-4">
+                <Button onClick={startCountdownThenRecord} className="bg-red-600 hover:bg-red-700 px-8 py-3 text-lg">
+                  🎬 Start Recording
+                </Button>
+                <Button variant="secondary" onClick={() => {
+                  setShowReadyToRecord(false);
+                  setShowTutorialPreview(true);
+                  if (streamRef.current) {
+                    streamRef.current.getTracks().forEach(track => track.stop());
+                    streamRef.current = null;
+                  }
+                }} className="px-6 py-3">
+                  ← Back to Tutorial
+                </Button>
+              </div>
+              <div className="text-center mt-4 text-gray-300">
+                <p>Camera is ready! Position yourself and click "Start Recording" when ready.</p>
                 <p className="text-sm text-gray-400 mt-2">Take {step + 1} of 3</p>
               </div>
             </>
           ) : (
-            // Recording Mode - Show camera with tutorial in corner
+            // Recording Mode - Show camera with tutorial in corner, actively recording
             <>
               <div className="relative w-full max-w-xl">
                 <video ref={videoRef} autoPlay playsInline muted className="w-full rounded-none bg-black" />
@@ -411,6 +464,7 @@ export default function RecordPage() {
               setStep(0);
               setClips([]);
               setShowTutorialPreview(true);
+              setShowReadyToRecord(false);
             }} disabled={isUploading}>
               🔄 Start Over
             </Button>
