@@ -140,12 +140,19 @@ export function VideoProvider({ children }) {
       console.log('🔍 Getting shared data from S3:', s3Key, 'for user:', userEmail);
       
       try {
-        const result = await downloadData({ 
+        // Use getUrl to get a pre-signed URL, then fetch the data
+        const { url } = await getUrl({ 
           key: s3Key,
           options: { level: 'public' }
         });
-        const data = await result.result;
-        const text = await data.text();
+        console.log('🔗 Got S3 URL:', url.toString());
+        
+        const response = await fetch(url.toString());
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const text = await response.text();
         const parsed = JSON.parse(text);
         console.log('✅ Retrieved shared data from S3:', key, 'data:', parsed);
         return parsed;
