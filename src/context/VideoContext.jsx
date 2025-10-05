@@ -466,18 +466,37 @@ export function VideoProvider({ children }) {
   // Add a function to get S3 video URL
   const getS3VideoUrl = async (value) => {
     try {
-      if (!value) return null;
+      console.log('🔗 getS3VideoUrl called with:', value, 'type:', typeof value);
+      
+      if (!value) {
+        console.log('❌ getS3VideoUrl: No value provided');
+        return null;
+      }
+      
       // Direct URLs (dev local server or already public URLs)
       if (typeof value === 'string' && (value.startsWith('blob:') || value.startsWith('http://') || value.startsWith('https://'))) {
-        if (isProd && value.includes('localhost')) return null;
+        if (isProd && value.includes('localhost')) {
+          console.log('❌ getS3VideoUrl: Localhost URL in production');
+          return null;
+        }
         const bust = `t=${Date.now()}`;
-        return value + (value.includes('?') ? `&${bust}` : `?${bust}`);
+        const result = value + (value.includes('?') ? `&${bust}` : `?${bust}`);
+        console.log('✅ getS3VideoUrl: Direct URL result:', result);
+        return result;
       }
+      
       // Prod: value is an S3 key → pre-signed URL
-      const { url } = await getUrl({ key: value });
-      return url.toString();
+      console.log('🔗 getS3VideoUrl: Getting pre-signed URL for S3 key:', value);
+      const { url } = await getUrl({ 
+        key: value,
+        options: { level: 'private' }
+      });
+      const result = url.toString();
+      console.log('✅ getS3VideoUrl: S3 URL result:', result);
+      return result;
     } catch (error) {
-      console.error('Error getting video URL:', error);
+      console.error('❌ getS3VideoUrl: Error getting video URL:', error);
+      console.error('❌ getS3VideoUrl: Error details:', { value, error: error.message });
       return null;
     }
   };

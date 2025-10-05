@@ -43,15 +43,24 @@ export default function MainGrid() {
 
   // Preload all takes for seamless transitions
   useEffect(() => {
+    console.log('🚀 MainGrid: Preloading useEffect triggered');
+    console.log('🚀 MainGrid: videoTakes length:', videoTakes?.length);
+    console.log('🚀 MainGrid: getS3VideoUrl type:', typeof getS3VideoUrl);
+    
     let isMounted = true;
     
     async function preloadAllTakes() {
       try {
         console.log('🔄 MainGrid: Preloading all takes for seamless transitions');
+        console.log('🔄 MainGrid: videoTakes:', videoTakes);
+        console.log('🔄 MainGrid: getS3VideoUrl function:', typeof getS3VideoUrl);
         
         const allUrls = await Promise.all(
           videoTakes.map(async (takes, index) => {
+            console.log(`🔄 Processing slot ${index}:`, takes);
+            
             if (!takes || (!takes.take1 && !takes.take2 && !takes.take3)) {
+              console.log(`📭 Slot ${index}: No takes found`);
               return { take1: null, take2: null, take3: null };
             }
             
@@ -64,25 +73,33 @@ export default function MainGrid() {
               
               if (takeVideo) {
                 try {
+                  console.log(`🔄 Preloading take ${takeNum} for slot ${index}, S3 key:`, takeVideo);
                   const url = await getS3VideoUrl(takeVideo);
-                  const response = await fetch(url, { method: 'HEAD' });
-                  if (response.ok) {
+                  console.log(`🔗 getS3VideoUrl returned for take ${takeNum} slot ${index}:`, url);
+                  
+                  if (url) {
+                    // Skip the HEAD request test for now - just use the URL
                     takeUrls[takeKey] = url;
-                    console.log(`✅ Preloaded take ${takeNum} for slot ${index}`);
+                    console.log(`✅ Preloaded take ${takeNum} for slot ${index}:`, url);
+                  } else {
+                    console.error(`❌ getS3VideoUrl returned null for take ${takeNum} slot ${index}`);
                   }
                 } catch (error) {
                   console.error(`❌ Error preloading take ${takeNum} for slot ${index}:`, error);
                 }
+              } else {
+                console.log(`📭 Slot ${index} take ${takeNum}: No video`);
               }
             }
             
+            console.log(`📋 Slot ${index} final takeUrls:`, takeUrls);
             return takeUrls;
           })
         );
         
         if (isMounted) {
           setAllTakeUrls(allUrls);
-          console.log('📋 All takes preloaded successfully');
+          console.log('📋 All takes preloaded successfully:', allUrls);
         }
       } catch (error) {
         console.error('❌ MainGrid: Error preloading takes:', error);
