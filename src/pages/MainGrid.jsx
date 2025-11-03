@@ -40,6 +40,7 @@ export default function MainGrid() {
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentTake, setCurrentTake] = useState(1); // 1, 2, or 3
   const [playbackInterval, setPlaybackInterval] = useState(null);
+  const [videosStarted, setVideosStarted] = useState(false); // Track if videos have been started for the first time
 
   const audioRef = useRef();
   const totalSlots = 16; // Always 16 squares
@@ -119,47 +120,100 @@ export default function MainGrid() {
 
   // Synchronize all videos of the current take across all squares
   // Ensures all squares show the same take at the exact same playback position
+  // Also ensures all videos start playing simultaneously on first load
   useEffect(() => {
-    const syncVideos = () => {
-      // Find all videos for the current take across all squares
-      const takeKey = `take${currentTake}`;
-      const videoElements = document.querySelectorAll(`video[src*="${takeKey}"]`);
+    const takeKey = `take${currentTake}`;
+    const videoElements = document.querySelectorAll(`video[src*="${takeKey}"]`);
+    
+    if (videoElements.length === 0) return;
+    
+    // Wait for ALL videos to be ready before starting any of them
+    const checkAndStart = () => {
+      const allVideos = Array.from(videoElements);
+      // Use readyState >= 2 (HAVE_CURRENT_DATA) instead of 3 for faster initial load
+      // This allows videos to start sooner while still being synchronized
+      const readyVideos = allVideos.filter(v => v.readyState >= 2);
       
-      if (videoElements.length === 0) return;
-      
-      // Filter to only ready videos
+      // If all videos have at least some data, start them together
+      // This is faster than waiting for HAVE_FUTURE_DATA (readyState >= 3)
+      if (readyVideos.length === allVideos.length && allVideos.length > 0) {
+        // First time starting - reset all to beginning and start simultaneously
+        if (!videosStarted) {
+          // Pause all videos first
+          allVideos.forEach(video => {
+            video.pause();
+            video.currentTime = 0;
+          });
+          
+          // Start all videos simultaneously
+          Promise.all(
+            allVideos.map(video => video.play().catch(() => {
+              // Ignore autoplay errors
+            }))
+          ).then(() => {
+            // After all videos start, sync them to the same time
+            const referenceTime = allVideos[0].currentTime;
+            allVideos.forEach((video, index) => {
+              if (index > 0) {
+                video.currentTime = referenceTime;
+              }
+            });
+            setVideosStarted(true);
+          });
+        } else {
+          // Subsequent syncs - just ensure they're playing and synced
+          const referenceVideo = readyVideos[0];
+          const referenceTime = referenceVideo.currentTime;
+          
+          readyVideos.forEach((video, index) => {
+            if (index > 0) {
+              if (Math.abs(video.currentTime - referenceTime) > 0.1) {
+                video.currentTime = referenceTime;
+              }
+            }
+            if (video.paused) {
+              video.play().catch(() => {
+                // Ignore autoplay errors
+              });
+            }
+          });
+        }
+      }
+    };
+    
+    // Check immediately
+    checkAndStart();
+    
+    // Check more frequently for faster initial load (every 25ms)
+    const checkInterval = setInterval(checkAndStart, 25);
+    
+    // Sync periodically to prevent drift (every 100ms)
+    const syncInterval = setInterval(() => {
       const readyVideos = Array.from(videoElements).filter(v => v.readyState >= 2);
       if (readyVideos.length === 0) return;
       
-      // Use the first ready video as the reference
       const referenceVideo = readyVideos[0];
       const referenceTime = referenceVideo.currentTime;
       
-      // Sync all other videos to the reference time
       readyVideos.forEach((video, index) => {
         if (index > 0) {
-          // Small threshold to avoid constant jumping
           if (Math.abs(video.currentTime - referenceTime) > 0.1) {
             video.currentTime = referenceTime;
           }
         }
-        // Ensure all videos are playing
         if (video.paused) {
           video.play().catch(() => {
             // Ignore autoplay errors
           });
         }
       });
+    }, 100);
+    
+    return () => {
+      clearInterval(checkInterval);
+      clearInterval(syncInterval);
     };
-    
-    // Sync immediately when take changes or when videos are loaded
-    syncVideos();
-    
-    // Sync periodically to prevent drift (every 100ms)
-    const syncInterval = setInterval(syncVideos, 100);
-    
-    return () => clearInterval(syncInterval);
-  }, [currentTake, allTakeUrls]);
+  }, [currentTake, allTakeUrls, videosStarted]);
 
 
   // Create padded array for mapping (16 slots total)
@@ -169,6 +223,7 @@ export default function MainGrid() {
   useEffect(() => {
     console.log('🎬 Starting synchronized playback');
     setCurrentTake(1);
+    setVideosStarted(false); // Reset when starting
     
     // Cycle through takes every 4 seconds
     // With preloaded videos, switching should be near-instant (no rebuffering)
@@ -176,6 +231,7 @@ export default function MainGrid() {
       setCurrentTake(prevTake => {
         const nextTake = prevTake === 3 ? 1 : prevTake + 1;
         console.log(`🎬 Switching to take ${nextTake}`);
+        setVideosStarted(false); // Reset for each new take
         return nextTake;
       });
     }, 4000); // 4 seconds per take
@@ -391,14 +447,14 @@ export default function MainGrid() {
                         <video
                           key={`${idx}-take1`}
                           src={allTakeUrls[idx].take1}
-                          autoPlay
+                          autoPlay={false}
                           muted
                           loop
                           playsInline
                           preload="auto"
                           className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
                           style={{ 
-                            opacity: currentTake === 1 ? 1 : 0,
+                            opacity: currentTake === 1 && videosStarted ? 1 : 0,
                             pointerEvents: currentTake === 1 ? 'auto' : 'none'
                           }}
                         />
@@ -407,14 +463,14 @@ export default function MainGrid() {
                         <video
                           key={`${idx}-take2`}
                           src={allTakeUrls[idx].take2}
-                          autoPlay
+                          autoPlay={false}
                           muted
                           loop
                           playsInline
                           preload="auto"
                           className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
                           style={{ 
-                            opacity: currentTake === 2 ? 1 : 0,
+                            opacity: currentTake === 2 && videosStarted ? 1 : 0,
                             pointerEvents: currentTake === 2 ? 'auto' : 'none'
                           }}
                         />
@@ -423,14 +479,14 @@ export default function MainGrid() {
                         <video
                           key={`${idx}-take3`}
                           src={allTakeUrls[idx].take3}
-                          autoPlay
+                          autoPlay={false}
                           muted
                           loop
                           playsInline
                           preload="auto"
                           className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
                           style={{ 
-                            opacity: currentTake === 3 ? 1 : 0,
+                            opacity: currentTake === 3 && videosStarted ? 1 : 0,
                             pointerEvents: currentTake === 3 ? 'auto' : 'none'
                           }}
                         />
