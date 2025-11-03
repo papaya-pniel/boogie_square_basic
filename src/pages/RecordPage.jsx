@@ -169,49 +169,24 @@ export default function RecordPage() {
       // This allows synchronized playback across the grid
       await saveAllTakesToGrid(clips);
       
+      // Also save merged video in the background (for backward compatibility)
+      try {
+        const mergedBlob = await mergeVideoClips(clips);
+        await updateVideoAtIndex(slotToUpdate, mergedBlob);
+        console.log('✅ Merged video saved');
+      } catch (mergeError) {
+        console.warn('Failed to save merged video (non-critical):', mergeError);
+      }
+      
       // After saving, get the grid number the user contributed to and reload to show their grid
       const userGridNum = await getUserContributedGridNumber();
       console.log('✅ All takes saved. User contributed to grid:', userGridNum);
       
-      // Show preview of the last take
-      const lastClip = clips[clips.length - 1];
-      const previewUrl = URL.createObjectURL(lastClip);
-      setPreviewUrl(previewUrl);
-      setStep(3); // Move to preview step
+      // Directly return to grid - no preview step
+      window.location.href = '/';
     } catch (e) {
       console.error(e);
       setUploadError('Failed to save videos. Please try again.');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const handleSaveMergedVideo = async () => {
-    try {
-      setIsUploading(true);
-      setUploadError(null);
-      
-      console.log('🎬 Starting merged video save process...');
-      
-      // Get the merged video blob
-      const mergedBlob = await mergeVideoClips(clips);
-      console.log('✅ Merged video blob created:', mergedBlob.size, 'bytes');
-      
-      const mergedUrl = URL.createObjectURL(mergedBlob);
-      console.log('🔗 Blob URL created:', mergedUrl);
-      
-      console.log('💾 Uploading to grid at index:', slotToUpdate);
-      await updateVideoAtIndex(slotToUpdate, mergedBlob); // Pass blob directly instead of URL
-      console.log('✅ Video uploaded successfully');
-      
-      // Navigate back to the main grid - reload to show user's contributed grid
-      console.log('🏠 Navigating back to main grid...');
-      // Reload to ensure user's grid is loaded correctly
-      window.location.href = '/';
-    } catch (e) {
-      console.error('❌ Error in handleSaveMergedVideo:', e);
-      setUploadError('Failed to save video. Please try again.');
-    } finally {
       setIsUploading(false);
     }
   };
@@ -463,42 +438,6 @@ export default function RecordPage() {
             </>
           )}
         </>
-      ) : step === 3 ? (
-        // Preview merged video step
-        <>
-          {isUploading && (
-            <div className="text-center mb-4">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4" />
-              <p className="text-gray-300">Saving your merged video...</p>
-            </div>
-          )}
-          {uploadError && <p className="text-red-400 mb-4">{uploadError}</p>}
-          
-          <div className="text-center mb-6">
-            <h3 className="text-2xl font-bold mb-2">🎉 All Takes Saved!</h3>
-            <p className="text-gray-300">Your 3 takes have been saved for synchronized grid playback:</p>
-            <p className="text-sm text-gray-400 mt-2">
-              💡 When the grid plays, all "Take 1" videos will play together, then "Take 2", then "Take 3"!
-            </p>
-          </div>
-          
-          <video src={previewUrl} controls className="w-full max-w-2xl rounded-lg shadow-lg" />
-          
-          <div className="flex gap-4 mt-6">
-            <Button onClick={handleSaveMergedVideo} disabled={isUploading} className="bg-green-600 hover:bg-green-700">
-              ✅ Save & Return to Grid
-            </Button>
-            <Button variant="secondary" onClick={() => {
-              setPreviewUrl(null);
-              setStep(0);
-              setClips([]);
-              setShowTutorialPreview(true);
-              setShowReadyToRecord(false);
-            }} disabled={isUploading}>
-              🔄 Start Over
-            </Button>
-          </div>
-        </>
       ) : (
         // Individual clip preview
         <>
@@ -512,7 +451,7 @@ export default function RecordPage() {
           <video src={previewUrl} controls className="w-full max-w-xl rounded-none" />
           <div className="flex gap-4 mt-4">
             <Button onClick={handleNextOrSave} disabled={isUploading}>
-              {step < 2 ? 'Use Take & Next Tutorial' : 'Merge 3 Takes & Preview'}
+              {step < 2 ? 'Use Take & Next Tutorial' : 'Save & Return to Grid'}
             </Button>
             <Button variant="secondary" onClick={handleReRecord} disabled={isUploading}>Re-record this Take</Button>
           </div>

@@ -700,10 +700,19 @@ export function VideoProvider({ children }) {
   // Check if a specific grid is full
   const isGridFull = async (gridNum) => {
     try {
-      const gridKey = getGridKey(gridNum, 'grid');
-      const gridVideos = await getSharedData(gridKey);
-      if (!Array.isArray(gridVideos)) return false;
-      return gridVideos.filter(v => v !== null).length >= 16;
+      const takesKey = getGridKey(gridNum, 'takes');
+      const gridTakes = await getSharedData(takesKey);
+      
+      if (!Array.isArray(gridTakes)) return false;
+      
+      // A slot is considered filled if it has at least one take (take1, take2, or take3)
+      const filledSlots = gridTakes.filter(takes => {
+        return takes && (takes.take1 || takes.take2 || takes.take3);
+      });
+      
+      const isFull = filledSlots.length >= 16;
+      console.log(`🔍 Checking if grid ${gridNum} is full: ${filledSlots.length}/16 slots filled`);
+      return isFull;
     } catch (error) {
       console.error('Error checking if grid is full:', error);
       return false;
@@ -714,12 +723,20 @@ export function VideoProvider({ children }) {
   const ensureActiveGrid = async () => {
     try {
       let currentActive = await getActiveGridNumber();
-      let isFull = await isGridFull(currentActive);
       
-      // If current grid is full, create next grid
-      if (isFull) {
+      // Keep checking grids until we find one that's not full
+      while (true) {
+        const isFull = await isGridFull(currentActive);
+        
+        if (!isFull) {
+          // Found a grid that's not full - use it
+          console.log(`✅ Grid ${currentActive} is available (not full)`);
+          break;
+        }
+        
+        // Current grid is full - create next grid
         currentActive += 1;
-        console.log(`📦 Current grid ${currentActive - 1} is full, creating grid ${currentActive}`);
+        console.log(`📦 Grid ${currentActive - 1} is full, creating grid ${currentActive}`);
         
         // Initialize new grid with empty data
         await setSharedData(getGridKey(currentActive, 'grid'), Array(16).fill(null));
