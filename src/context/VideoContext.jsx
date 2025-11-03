@@ -925,6 +925,72 @@ export function VideoProvider({ children }) {
     }
   };
 
+  // Load a specific grid by number (for browsing)
+  const loadGridByNumber = async (gridNum) => {
+    try {
+      setIsLoading(true);
+      console.log(`📂 Loading grid ${gridNum} for viewing`);
+      
+      const gridKey = getGridKey(gridNum, 'grid');
+      const takesKey = getGridKey(gridNum, 'takes');
+      const contribsKey = getGridKey(gridNum, 'contributions');
+      
+      // Load grid data
+      let sharedVideos = await getSharedData(gridKey);
+      let sharedVideoTakes = await getSharedData(takesKey);
+      let sharedContributions = await getSharedData(contribsKey);
+      
+      // If new keys don't have data, try legacy keys (for backward compatibility)
+      if ((!Array.isArray(sharedVideos) || sharedVideos.filter(v => v !== null).length === 0) && gridNum === 1) {
+        console.log('📦 Loading from legacy keys for backward compatibility');
+        sharedVideos = await getSharedData(SHARED_GRID_KEY);
+        sharedVideoTakes = await getSharedData(SHARED_VIDEO_TAKES_KEY);
+        sharedContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      }
+
+      // Ensure 16 slots for videos
+      if (!Array.isArray(sharedVideos)) {
+        sharedVideos = Array(16).fill(null);
+      }
+      while (sharedVideos.length < 16) {
+        sharedVideos.push(null);
+      }
+      setVideos(sharedVideos);
+
+      // Ensure 16 slots for video takes
+      if (!Array.isArray(sharedVideoTakes)) {
+        sharedVideoTakes = Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null }));
+      }
+      const takesData = Array.isArray(sharedVideoTakes) ? sharedVideoTakes : [];
+      while (takesData.length < 16) {
+        takesData.push({ take1: null, take2: null, take3: null });
+      }
+      setVideoTakes(takesData);
+
+      // Calculate user's contributions from shared data
+      const userContribs = new Set();
+      if (Array.isArray(sharedContributions)) {
+        sharedContributions.forEach(contrib => {
+          if (contrib.userEmail === userEmail) {
+            userContribs.add(contrib.position);
+          }
+        });
+      }
+      setUserContributions(userContribs);
+      
+      // Update state
+      setCurrentGridNumber(gridNum);
+      setCurrentGridId(`shared-grid-${gridNum}`);
+      
+      console.log(`✅ Grid ${gridNum} loaded successfully`);
+    } catch (error) {
+      console.error('Error loading grid by number:', error);
+      setError(`Failed to load grid ${gridNum}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <VideoContext.Provider value={{ 
       videos, 
@@ -948,7 +1014,8 @@ export function VideoProvider({ children }) {
       signOutUser,
       isGridFull,
       ensureActiveGrid,
-      getUserContributedGridNumber
+      getUserContributedGridNumber,
+      loadGridByNumber
     }}>
       {children}
     </VideoContext.Provider>

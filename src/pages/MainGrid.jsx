@@ -31,7 +31,8 @@ export default function MainGrid() {
         activeGridNumber,
         currentGridNumber,
         userContributedGridNumber,
-        ensureActiveGrid
+        ensureActiveGrid,
+        loadGridByNumber
   } = useContext(VideoContext);
   const [selectedSong, setSelectedSong] = useState("none.mp3");
   const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
@@ -218,6 +219,12 @@ export default function MainGrid() {
   }, [paddedVideos]);
 
   const handleSlotClick = async (index) => {
+    // If viewing a grid that's not the active grid, don't allow contributions
+    if (currentGridNumber !== activeGridNumber) {
+      console.log(`📋 Viewing grid ${currentGridNumber}, but active grid is ${activeGridNumber}. Can only contribute to active grid.`);
+      return;
+    }
+    
     // If user has already contributed, they can only interact with their own grid
     // If they haven't contributed, ensure we have an active grid that isn't full
     if (userContributedGridNumber === null) {
@@ -287,11 +294,30 @@ export default function MainGrid() {
           <div className="flex justify-between items-center w-full max-w-4xl mb-8">
             <div className="flex items-center gap-4">
               <h1 className="text-4xl font-bold">Boogie Square</h1>
-              <div className="text-lg text-gray-400 font-semibold">
-                Grid #{currentGridNumber || 1}
-                {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
-                  <span className="ml-2 text-sm text-green-400">(Your Grid)</span>
-                )}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => loadGridByNumber(Math.max(1, currentGridNumber - 1))}
+                  disabled={currentGridNumber <= 1}
+                  className="px-2 py-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  ←
+                </button>
+                <div className="text-lg text-gray-400 font-semibold">
+                  Grid #{currentGridNumber || 1}
+                  {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
+                    <span className="ml-2 text-sm text-green-400">(Your Grid)</span>
+                  )}
+                  {currentGridNumber === activeGridNumber && (
+                    <span className="ml-2 text-sm text-blue-400">(Active)</span>
+                  )}
+                </div>
+                <button
+                  onClick={() => loadGridByNumber(currentGridNumber + 1)}
+                  disabled={currentGridNumber >= activeGridNumber}
+                  className="px-2 py-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  →
+                </button>
               </div>
             </div>
             <AuthButton />
