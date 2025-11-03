@@ -43,8 +43,7 @@ export default function MainGrid() {
 
   const audioRef = useRef();
   const totalSlots = 16; // Always 16 squares
-  const [videoUrls, setVideoUrls] = useState([]);
-  const [allTakeUrls, setAllTakeUrls] = useState([]); // Store URLs for all takes
+  const [allTakeUrls, setAllTakeUrls] = useState([]); // Store URLs for all takes (for zero-delay switching)
 
   // Preload all takes for seamless transitions
   useEffect(() => {
@@ -118,29 +117,53 @@ export default function MainGrid() {
     };
   }, [videoTakes, getS3VideoUrl]);
 
-  // Update current take URLs from preloaded data
+  // Synchronize all videos of the current take across all squares
+  // Ensures all squares show the same take at the exact same playback position
   useEffect(() => {
-    console.log('🔄 Updating video URLs for current take:', currentTake);
-    console.log('🔄 allTakeUrls:', allTakeUrls);
+    const syncVideos = () => {
+      // Find all videos for the current take across all squares
+      const takeKey = `take${currentTake}`;
+      const videoElements = document.querySelectorAll(`video[src*="${takeKey}"]`);
+      
+      if (videoElements.length === 0) return;
+      
+      // Filter to only ready videos
+      const readyVideos = Array.from(videoElements).filter(v => v.readyState >= 2);
+      if (readyVideos.length === 0) return;
+      
+      // Use the first ready video as the reference
+      const referenceVideo = readyVideos[0];
+      const referenceTime = referenceVideo.currentTime;
+      
+      // Sync all other videos to the reference time
+      readyVideos.forEach((video, index) => {
+        if (index > 0) {
+          // Small threshold to avoid constant jumping
+          if (Math.abs(video.currentTime - referenceTime) > 0.1) {
+            video.currentTime = referenceTime;
+          }
+        }
+        // Ensure all videos are playing
+        if (video.paused) {
+          video.play().catch(() => {
+            // Ignore autoplay errors
+          });
+        }
+      });
+    };
     
-    const currentUrls = allTakeUrls.map((slotTakes, index) => {
-      if (!slotTakes) {
-        console.log(`📭 Slot ${index}: No slotTakes`);
-        return null;
-      }
-      const url = slotTakes[`take${currentTake}`] || null;
-      console.log(`🎥 Slot ${index} take${currentTake}:`, url);
-      return url;
-    });
+    // Sync immediately when take changes or when videos are loaded
+    syncVideos();
     
-    console.log('📋 Final currentUrls:', currentUrls);
-    setVideoUrls(currentUrls);
-  }, [allTakeUrls, currentTake]);
+    // Sync periodically to prevent drift (every 100ms)
+    const syncInterval = setInterval(syncVideos, 100);
+    
+    return () => clearInterval(syncInterval);
+  }, [currentTake, allTakeUrls]);
 
 
-  // Always use synchronized video sources
-  const paddedVideos = [...videoUrls];
-  while (paddedVideos.length < totalSlots) paddedVideos.push(null);
+  // Create padded array for mapping (16 slots total)
+  const paddedSlots = Array(totalSlots).fill(null).map((_, idx) => idx);
 
   // Initialize synchronized playback on mount
   useEffect(() => {
@@ -148,6 +171,7 @@ export default function MainGrid() {
     setCurrentTake(1);
     
     // Cycle through takes every 4 seconds
+    // With preloaded videos, switching should be near-instant (no rebuffering)
     const interval = setInterval(() => {
       setCurrentTake(prevTake => {
         const nextTake = prevTake === 3 ? 1 : prevTake + 1;
@@ -331,15 +355,14 @@ export default function MainGrid() {
           height: "400px"
         }}
       >
-        {paddedVideos.map((src, idx) => {
+        {paddedSlots.map((_, idx) => {
           const hasUserContribution = userContributions.has(idx);
           // Check if there are any takes recorded for this slot (not just current take)
           const hasAnyRecording = videoTakes[idx] && (videoTakes[idx].take1 || videoTakes[idx].take2 || videoTakes[idx].take3);
-          const hasCurrentTake = src !== null;
           
           // Debug logging
           if (hasAnyRecording) {
-            console.log(`🎥 Slot ${idx}: hasAnyRecording=${hasAnyRecording}, hasCurrentTake=${hasCurrentTake}, src=${src}, currentTake=${currentTake}`);
+            console.log(`🎥 Slot ${idx}: hasAnyRecording=${hasAnyRecording}, currentTake=${currentTake}`);
             console.log(`🎥 Slot ${idx} videoTakes:`, videoTakes[idx]);
             console.log(`🎥 Slot ${idx} allTakeUrls:`, allTakeUrls[idx]);
           }
@@ -352,18 +375,59 @@ export default function MainGrid() {
             >
               {hasAnyRecording ? (
                 <>
-                  {/* Show the actual recorded video */}
-                  {src && (
-                    <video
-                      key={`${idx}-${currentTake}`}
-                      src={src}
-                      autoPlay
-                      muted
-                      loop
-                      playsInline
-                      className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-200"
-                      style={{ opacity: 1 }}
-                    />
+                  {/* Render all three takes as separate video elements, preloaded and ready */}
+                  {/* This eliminates rebuffering delay when switching takes */}
+                  {allTakeUrls[idx] && (
+                    <>
+                      {allTakeUrls[idx].take1 && (
+                        <video
+                          key={`${idx}-take1`}
+                          src={allTakeUrls[idx].take1}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
+                          className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
+                          style={{ 
+                            opacity: currentTake === 1 ? 1 : 0,
+                            pointerEvents: currentTake === 1 ? 'auto' : 'none'
+                          }}
+                        />
+                      )}
+                      {allTakeUrls[idx].take2 && (
+                        <video
+                          key={`${idx}-take2`}
+                          src={allTakeUrls[idx].take2}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
+                          className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
+                          style={{ 
+                            opacity: currentTake === 2 ? 1 : 0,
+                            pointerEvents: currentTake === 2 ? 'auto' : 'none'
+                          }}
+                        />
+                      )}
+                      {allTakeUrls[idx].take3 && (
+                        <video
+                          key={`${idx}-take3`}
+                          src={allTakeUrls[idx].take3}
+                          autoPlay
+                          muted
+                          loop
+                          playsInline
+                          preload="auto"
+                          className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
+                          style={{ 
+                            opacity: currentTake === 3 ? 1 : 0,
+                            pointerEvents: currentTake === 3 ? 'auto' : 'none'
+                          }}
+                        />
+                      )}
+                    </>
                   )}
                   {/* User's own recording indicator */}
                   {hasUserContribution && (
