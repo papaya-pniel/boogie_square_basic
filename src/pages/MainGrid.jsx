@@ -128,9 +128,9 @@ export default function MainGrid() {
   useEffect(() => {
     const takeKey = `take${currentTake}`;
     
-    // Use a more reliable selector - wait a bit for DOM to update
+    // Use data-take attribute instead of src attribute (src contains S3 URLs, not "take1")
     const getVideoElements = () => {
-      return document.querySelectorAll(`video[src*="${takeKey}"]`);
+      return document.querySelectorAll(`video[data-take="${currentTake}"]`);
     };
     
     let videoElements = getVideoElements();
@@ -542,6 +542,8 @@ export default function MainGrid() {
                       {allTakeUrls[idx].take1 && (
                         <video
                           key={`${idx}-take1`}
+                          data-take="1"
+                          data-slot={idx}
                           src={allTakeUrls[idx].take1}
                           autoPlay={false}
                           muted
@@ -564,6 +566,8 @@ export default function MainGrid() {
                       {allTakeUrls[idx].take2 && (
                         <video
                           key={`${idx}-take2`}
+                          data-take="2"
+                          data-slot={idx}
                           src={allTakeUrls[idx].take2}
                           autoPlay={false}
                           muted
@@ -586,6 +590,8 @@ export default function MainGrid() {
                       {allTakeUrls[idx].take3 && (
                         <video
                           key={`${idx}-take3`}
+                          data-take="3"
+                          data-slot={idx}
                           src={allTakeUrls[idx].take3}
                           autoPlay={false}
                           muted
