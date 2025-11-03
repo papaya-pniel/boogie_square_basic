@@ -125,58 +125,71 @@ export default function MainGrid() {
     const takeKey = `take${currentTake}`;
     const videoElements = document.querySelectorAll(`video[src*="${takeKey}"]`);
     
-    if (videoElements.length === 0) return;
+    if (videoElements.length === 0) {
+      console.log(`⚠️ No video elements found for ${takeKey}`);
+      return;
+    }
     
-    // Wait for ALL videos to be ready before starting any of them
+    console.log(`🎬 Found ${videoElements.length} video elements for ${takeKey}`);
+    
+    // Wait for videos to be ready before starting them
     const checkAndStart = () => {
       const allVideos = Array.from(videoElements);
       // Use readyState >= 2 (HAVE_CURRENT_DATA) instead of 3 for faster initial load
-      // This allows videos to start sooner while still being synchronized
       const readyVideos = allVideos.filter(v => v.readyState >= 2);
       
-      // If all videos have at least some data, start them together
-      // This is faster than waiting for HAVE_FUTURE_DATA (readyState >= 3)
+      console.log(`📊 Ready videos: ${readyVideos.length}/${allVideos.length}, videosStarted: ${videosStarted}`);
+      
+      // Wait for ALL videos to be ready before starting (for seamless load)
+      // Only start if we have videos and ALL of them are ready
       if (readyVideos.length === allVideos.length && allVideos.length > 0) {
         // First time starting - reset all to beginning and start simultaneously
         if (!videosStarted) {
-          // Pause all videos first
-          allVideos.forEach(video => {
+          // Only start videos that are ready
+          readyVideos.forEach(video => {
             video.pause();
             video.currentTime = 0;
           });
           
-          // Start all videos simultaneously
+          console.log(`🚀 Starting ${readyVideos.length} videos simultaneously`);
+          
+          // Start all ready videos simultaneously
           Promise.all(
-            allVideos.map(video => video.play().catch(() => {
-              // Ignore autoplay errors
+            readyVideos.map(video => video.play().catch((err) => {
+              console.warn('Autoplay failed for video:', err);
             }))
           ).then(() => {
             // After all videos start, sync them to the same time
-            const referenceTime = allVideos[0].currentTime;
-            allVideos.forEach((video, index) => {
-              if (index > 0) {
-                video.currentTime = referenceTime;
-              }
-            });
-            setVideosStarted(true);
+            if (readyVideos.length > 0) {
+              const referenceTime = readyVideos[0].currentTime;
+              readyVideos.forEach((video, index) => {
+                if (index > 0) {
+                  video.currentTime = referenceTime;
+                }
+              });
+              console.log(`✅ Videos started, setting videosStarted to true`);
+              setVideosStarted(true);
+            }
           });
         } else {
-          // Subsequent syncs - just ensure they're playing and synced
-          const referenceVideo = readyVideos[0];
-          const referenceTime = referenceVideo.currentTime;
-          
-          readyVideos.forEach((video, index) => {
-            if (index > 0) {
-              if (Math.abs(video.currentTime - referenceTime) > 0.1) {
-                video.currentTime = referenceTime;
+          // Subsequent syncs - ensure all ready videos are playing and synced
+          if (readyVideos.length > 0) {
+            const referenceVideo = readyVideos[0];
+            const referenceTime = referenceVideo.currentTime;
+            
+            readyVideos.forEach((video, index) => {
+              if (index > 0) {
+                if (Math.abs(video.currentTime - referenceTime) > 0.1) {
+                  video.currentTime = referenceTime;
+                }
               }
-            }
-            if (video.paused) {
-              video.play().catch(() => {
-                // Ignore autoplay errors
-              });
-            }
-          });
+              if (video.paused) {
+                video.play().catch(() => {
+                  // Ignore autoplay errors
+                });
+              }
+            });
+          }
         }
       }
     };
