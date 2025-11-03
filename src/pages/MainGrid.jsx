@@ -200,45 +200,53 @@ export default function MainGrid() {
   }, [selectedSong]);
 
   useEffect(() => {
-    let loaded = 0;
-    const total = paddedVideos.filter(Boolean).length;
-    const videoElements = [];
+    // Check if all takes are loaded (for grid readiness)
+    // Since we now have multiple video elements per slot, we check allTakeUrls instead
+    const totalVideos = allTakeUrls.reduce((count, slotTakes) => {
+      if (!slotTakes) return count;
+      return count + (slotTakes.take1 ? 1 : 0) + (slotTakes.take2 ? 1 : 0) + (slotTakes.take3 ? 1 : 0);
+    }, 0);
 
-    if (total === 0) {
+    if (totalVideos === 0) {
       setGridReady(true);
       return;
     }
 
-    paddedVideos.forEach((src) => {
-      if (!src) return;
-      const video = document.createElement("video");
-      video.src = src;
-      videoElements.push(video);
+    // Wait for videos to be loaded in the DOM
+    // The videos are already being rendered, so we just need to check if they're ready
+    let loaded = 0;
+    const videoElements = document.querySelectorAll('video[src*="take"]');
+    
+    if (videoElements.length === 0) {
+      // Videos not in DOM yet, wait a bit
+      const checkInterval = setInterval(() => {
+        const videos = document.querySelectorAll('video[src*="take"]');
+        if (videos.length > 0) {
+          clearInterval(checkInterval);
+          // Videos are being loaded by the browser, mark as ready
+          setGridReady(true);
+        }
+      }, 100);
       
-      video.onloadeddata = () => {
-        loaded += 1;
-        if (loaded >= total) {
-          setGridReady(true);
-        }
-      };
-      video.onerror = () => {
-        console.warn("Failed to load:", src);
-        loaded += 1;
-        if (loaded >= total) {
-          setGridReady(true);
-        }
-      };
-    });
+      return () => clearInterval(checkInterval);
+    }
 
-    // Cleanup function to remove video elements and event listeners
-    return () => {
-      videoElements.forEach(video => {
-        video.onloadeddata = null;
-        video.onerror = null;
-        video.src = '';
-      });
+    // Videos are in DOM, check their ready state
+    const checkReadiness = () => {
+      const readyVideos = Array.from(videoElements).filter(v => v.readyState >= 2).length;
+      if (readyVideos >= videoElements.length) {
+        setGridReady(true);
+      }
     };
-  }, [paddedVideos]);
+
+    // Check immediately
+    checkReadiness();
+    
+    // Also check periodically
+    const checkInterval = setInterval(checkReadiness, 100);
+    
+    return () => clearInterval(checkInterval);
+  }, [allTakeUrls]);
 
   const handleSlotClick = async (index) => {
     // If viewing a grid that's not the active grid, don't allow contributions
