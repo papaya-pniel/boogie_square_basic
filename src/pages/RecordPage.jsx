@@ -36,7 +36,7 @@ export default function RecordPage() {
   const idxNum = parseInt(index, 10);
   const slotToUpdate = idxNum; // 4x4 grid direct mapping
 
-  const { updateVideoAtIndex, updateVideoTakesAtIndex } = useContext(VideoContext);
+  const { updateVideoAtIndex, updateVideoTakesAtIndex, currentGridNumber, getUserContributedGridNumber } = useContext(VideoContext);
   const navigate = useNavigate();
 
   const [recording, setRecording] = useState(false);
@@ -169,6 +169,10 @@ export default function RecordPage() {
       // This allows synchronized playback across the grid
       await saveAllTakesToGrid(clips);
       
+      // After saving, get the grid number the user contributed to and reload to show their grid
+      const userGridNum = await getUserContributedGridNumber();
+      console.log('✅ All takes saved. User contributed to grid:', userGridNum);
+      
       // Show preview of the last take
       const lastClip = clips[clips.length - 1];
       const previewUrl = URL.createObjectURL(lastClip);
@@ -200,9 +204,10 @@ export default function RecordPage() {
       await updateVideoAtIndex(slotToUpdate, mergedBlob); // Pass blob directly instead of URL
       console.log('✅ Video uploaded successfully');
       
-      // Navigate back to the main grid
+      // Navigate back to the main grid - reload to show user's contributed grid
       console.log('🏠 Navigating back to main grid...');
-      navigate('/');
+      // Reload to ensure user's grid is loaded correctly
+      window.location.href = '/';
     } catch (e) {
       console.error('❌ Error in handleSaveMergedVideo:', e);
       setUploadError('Failed to save video. Please try again.');
@@ -317,6 +322,7 @@ export default function RecordPage() {
   const saveAllTakesToGrid = async (clips) => {
     try {
       console.log('Saving all takes separately:', clips.length);
+      console.log('Current grid number:', currentGridNumber);
       
       // Save all 3 takes to the same slot using the new function
       const take1 = clips[0] || null;

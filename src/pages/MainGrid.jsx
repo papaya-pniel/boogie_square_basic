@@ -27,7 +27,11 @@ export default function MainGrid() {
         userContributions,
         clearSharedGrid,
         forceSyncFromShared,
-        user
+        user,
+        activeGridNumber,
+        currentGridNumber,
+        userContributedGridNumber,
+        ensureActiveGrid
   } = useContext(VideoContext);
   const [selectedSong, setSelectedSong] = useState("none.mp3");
   const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
@@ -213,7 +217,21 @@ export default function MainGrid() {
     };
   }, [paddedVideos]);
 
-  const handleSlotClick = (index) => {
+  const handleSlotClick = async (index) => {
+    // If user has already contributed, they can only interact with their own grid
+    // If they haven't contributed, ensure we have an active grid that isn't full
+    if (userContributedGridNumber === null) {
+      // User hasn't contributed yet - ensure we have an active grid (will auto-create if current is full)
+      const gridNum = await ensureActiveGrid();
+      
+      // If ensureActiveGrid created a new grid (different from what we're currently viewing), reload to show it
+      if (gridNum !== currentGridNumber) {
+        console.log(`📦 Switched to grid ${gridNum}, reloading to show new grid`);
+        window.location.reload();
+        return;
+      }
+    }
+    
     const hasUserContribution = userContributions.has(index);
     // Check if there are any takes recorded for this slot (not just current take)
     const hasAnyRecording = videoTakes[index] && (videoTakes[index].take1 || videoTakes[index].take2 || videoTakes[index].take3);
@@ -267,7 +285,15 @@ export default function MainGrid() {
       return (
         <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
           <div className="flex justify-between items-center w-full max-w-4xl mb-8">
-            <h1 className="text-4xl font-bold">Boogie Square</h1>
+            <div className="flex items-center gap-4">
+              <h1 className="text-4xl font-bold">Boogie Square</h1>
+              <div className="text-lg text-gray-400 font-semibold">
+                Grid #{currentGridNumber || 1}
+                {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
+                  <span className="ml-2 text-sm text-green-400">(Your Grid)</span>
+                )}
+              </div>
+            </div>
             <AuthButton />
           </div>
       

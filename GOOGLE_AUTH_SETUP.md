@@ -52,3 +52,7 @@ Replace the placeholders in `amplify_outputs.json`:
 - **Anonymous users**: Can still use the app without signing in
 - **Google users**: Get persistent identity and better UX
 - **Seamless transition**: Existing functionality preserved
+
+
+
+

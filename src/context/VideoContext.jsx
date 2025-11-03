@@ -8,6 +8,9 @@ export function VideoProvider({ children }) {
   const [videos, setVideos] = useState(Array(16).fill(null));
   const [videoTakes, setVideoTakes] = useState(Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
   const [currentGridId, setCurrentGridId] = useState('shared-grid-1');
+  const [activeGridNumber, setActiveGridNumber] = useState(1); // Track which grid number is currently active for new contributions
+  const [currentGridNumber, setCurrentGridNumber] = useState(1); // Track which grid number the user is currently viewing
+  const [userContributedGridNumber, setUserContributedGridNumber] = useState(null); // Track which grid this user has contributed to
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [user, setUser] = useState(null);
@@ -124,10 +127,18 @@ export function VideoProvider({ children }) {
 
     const syncInterval = setInterval(async () => {
       try {
-        const currentVideos = await getSharedData(SHARED_GRID_KEY);
-        const currentContribs = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+        // Get current active grid number
+        const gridNum = await getActiveGridNumber();
+        const gridKey = getGridKey(gridNum, 'grid');
+        const contribsKey = getGridKey(gridNum, 'contributions');
+        
+        const currentVideos = await getSharedData(gridKey);
+        const currentContribs = await getSharedData(contribsKey);
         
         const safeVideos = Array.isArray(currentVideos) ? currentVideos : Array(16).fill(null);
+        // Ensure 16 slots
+        while (safeVideos.length < 16) safeVideos.push(null);
+        
         // Check if videos have changed
         const videosChanged = JSON.stringify(safeVideos) !== JSON.stringify(videos);
         if (videosChanged) {
@@ -151,6 +162,14 @@ export function VideoProvider({ children }) {
           console.log('Detected contribution changes, updating...');
           setUserContributions(userContribs);
         }
+        
+        // Update active grid number if it changed
+        if (gridNum !== activeGridNumber) {
+          setActiveGridNumber(gridNum);
+          setCurrentGridId(`shared-grid-${gridNum}`);
+          // Reload grid data if we switched grids
+          await initializeGrid();
+        }
       } catch (error) {
         console.error('Error during periodic sync:', error);
       }
@@ -159,13 +178,22 @@ export function VideoProvider({ children }) {
     return () => clearInterval(syncInterval);
   }, [user, videos, userContributions]);
 
-  // Shared grid storage keys - using more universal storage
+  // Shared grid storage keys - using grid-specific keys
+  const getGridKey = (gridNum, type) => {
+    // type: 'grid', 'takes', or 'contributions'
+    return `shared-boogie-${type}-${gridNum}`;
+  };
+  
+  // Active grid tracker key
+  const ACTIVE_GRID_KEY = 'shared-boogie-active-grid-number';
+  
+  // User grid mapping key - stores which grid each user has contributed to
+  const USER_GRID_MAPPING_KEY = 'shared-boogie-user-grid-mapping';
+  
+  // Legacy keys for backward compatibility (grid-1)
   const SHARED_GRID_KEY = 'shared-boogie-grid';
   const SHARED_VIDEO_TAKES_KEY = 'shared-boogie-video-takes';
   const SHARED_CONTRIBUTIONS_KEY = 'shared-boogie-contributions';
-  
-  // Create a universal grid identifier that works across all browser contexts
-  const UNIVERSAL_GRID_ID = 'universal-boogie-grid-v1';
 
   // AWS Amplify-based shared storage (works across all users)
   const getSharedData = async (key) => {
@@ -258,18 +286,63 @@ export function VideoProvider({ children }) {
       localStorage.setItem('storage-context', `${userEmail}-${Date.now()}`);
       localStorage.setItem('current-user-email', userEmail);
       
-      // Load shared videos, video takes, and contributions
-      const sharedVideos = await getSharedData(SHARED_GRID_KEY);
-      const sharedVideoTakes = await getSharedData(SHARED_VIDEO_TAKES_KEY);
-      const sharedContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      // Check if user has already contributed to a grid
+      const userGridNum = await getUserContributedGridNumber();
+      let gridNum;
+      
+      if (userGridNum !== null) {
+        // User has contributed - load their grid
+        console.log(`👤 User has contributed to grid ${userGridNum}, loading that grid`);
+        gridNum = userGridNum;
+        setUserContributedGridNumber(userGridNum);
+      } else {
+        // User hasn't contributed yet - get an active grid (will auto-create if current is full)
+        console.log('👤 User has not contributed yet, getting active grid');
+        gridNum = await ensureActiveGrid();
+        setActiveGridNumber(gridNum);
+      }
+      
+      setCurrentGridNumber(gridNum);
+      setCurrentGridId(`shared-grid-${gridNum}`);
+      
+      // Load shared videos, video takes, and contributions from the active grid
+      const gridKey = getGridKey(gridNum, 'grid');
+      const takesKey = getGridKey(gridNum, 'takes');
+      const contribsKey = getGridKey(gridNum, 'contributions');
+      
+      // Try to load from new grid-specific keys, fall back to legacy keys for backward compatibility
+      let sharedVideos = await getSharedData(gridKey);
+      let sharedVideoTakes = await getSharedData(takesKey);
+      let sharedContributions = await getSharedData(contribsKey);
+      
+      // If new keys don't have data, try legacy keys (for backward compatibility)
+      if ((!Array.isArray(sharedVideos) || sharedVideos.filter(v => v !== null).length === 0) && gridNum === 1) {
+        console.log('📦 Loading from legacy keys for backward compatibility');
+        sharedVideos = await getSharedData(SHARED_GRID_KEY);
+        sharedVideoTakes = await getSharedData(SHARED_VIDEO_TAKES_KEY);
+        sharedContributions = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+        
+        // Migrate legacy data to grid-1 keys
+        if (Array.isArray(sharedVideos) && sharedVideos.filter(v => v !== null).length > 0) {
+          await setSharedData(gridKey, sharedVideos);
+          await setSharedData(takesKey, sharedVideoTakes);
+          await setSharedData(contribsKey, sharedContributions);
+        }
+      }
 
       // Ensure 16 slots for videos
+      if (!Array.isArray(sharedVideos)) {
+        sharedVideos = Array(16).fill(null);
+      }
       while (sharedVideos.length < 16) {
         sharedVideos.push(null);
       }
       setVideos(sharedVideos);
 
       // Ensure 16 slots for video takes
+      if (!Array.isArray(sharedVideoTakes)) {
+        sharedVideoTakes = Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null }));
+      }
       const takesData = Array.isArray(sharedVideoTakes) ? sharedVideoTakes : [];
       while (takesData.length < 16) {
         takesData.push({ take1: null, take2: null, take3: null });
@@ -278,14 +351,16 @@ export function VideoProvider({ children }) {
 
       // Calculate user's contributions from shared data using email as persistent identifier
       const userContribs = new Set();
-      sharedContributions.forEach(contrib => {
-        if (contrib.userEmail === userEmail) {
-          userContribs.add(contrib.position);
-        }
-      });
+      if (Array.isArray(sharedContributions)) {
+        sharedContributions.forEach(contrib => {
+          if (contrib.userEmail === userEmail) {
+            userContribs.add(contrib.position);
+          }
+        });
+      }
       setUserContributions(userContribs);
 
-      console.log('Grid initialized from shared storage');
+      console.log(`Grid ${gridNum} initialized from shared storage`);
       console.log('🎭 User Identity:', { 
         userId: user.userId, 
         email: userEmail, 
@@ -293,11 +368,11 @@ export function VideoProvider({ children }) {
       });
       console.log('📊 Shared videos count:', sharedVideos.filter(v => v !== null).length);
       console.log('🎯 User contributions:', Array.from(userContribs));
-      console.log('📋 All contributions:', sharedContributions.map(c => ({ 
+      console.log('📋 All contributions:', Array.isArray(sharedContributions) ? sharedContributions.map(c => ({ 
         position: c.position, 
         email: c.userEmail, 
         isThisUser: c.userEmail === userEmail 
-      })));
+      })) : []);
     } catch (error) {
       console.error('Error initializing grid:', error);
     } finally {
@@ -397,7 +472,56 @@ export function VideoProvider({ children }) {
 
   const updateVideoAtIndex = async (index, videoUrl) => {
     try {
-      console.log('🎬 VideoContext: updateVideoAtIndex called with index:', index, 'currentGridId:', currentGridId);
+      // Check if user has already contributed to a grid
+      let gridNum;
+      const userGridNum = await getUserContributedGridNumber();
+      
+      if (userGridNum !== null) {
+        // User has already contributed - use their grid
+        gridNum = userGridNum;
+        console.log(`👤 User has contributed to grid ${gridNum}, using that grid`);
+      } else {
+        // User hasn't contributed yet - ensure we have an active grid that isn't full
+        gridNum = await ensureActiveGrid();
+        setActiveGridNumber(gridNum);
+      }
+      
+      setCurrentGridNumber(gridNum);
+      setCurrentGridId(`shared-grid-${gridNum}`);
+      
+      // Reload grid data if we switched to a different grid
+      if (gridNum !== currentGridNumber) {
+        const gridKey = getGridKey(gridNum, 'grid');
+        const takesKey = getGridKey(gridNum, 'takes');
+        const contribsKey = getGridKey(gridNum, 'contributions');
+        
+        const gridVideos = await getSharedData(gridKey);
+        const gridTakes = await getSharedData(takesKey);
+        const gridContribs = await getSharedData(contribsKey);
+        
+        // Ensure 16 slots
+        let updatedVideos = Array.isArray(gridVideos) ? [...gridVideos] : Array(16).fill(null);
+        while (updatedVideos.length < 16) updatedVideos.push(null);
+        
+        let updatedTakes = Array.isArray(gridTakes) ? [...gridTakes] : Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null }));
+        while (updatedTakes.length < 16) updatedTakes.push({ take1: null, take2: null, take3: null });
+        
+        setVideos(updatedVideos);
+        setVideoTakes(updatedTakes);
+        
+        // Update user contributions for this grid
+        const userContribs = new Set();
+        if (Array.isArray(gridContribs)) {
+          gridContribs.forEach(contrib => {
+            if (contrib.userEmail === userEmail) {
+              userContribs.add(contrib.position);
+            }
+          });
+        }
+        setUserContributions(userContribs);
+      }
+      
+      console.log('🎬 VideoContext: updateVideoAtIndex called with index:', index, 'currentGridId:', currentGridId, 'gridNum:', gridNum);
       console.log('🎬 VideoContext: videoUrl type:', typeof videoUrl, videoUrl);
 
       const ownedIndex = getUserOwnedIndex();
@@ -433,9 +557,10 @@ export function VideoProvider({ children }) {
       setVideos(updatedVideos);
       console.log('📋 VideoContext: Updated videos array:', updatedVideos);
 
-      // Save to shared storage
+      // Save to grid-specific shared storage
+      const gridKey = getGridKey(gridNum, 'grid');
       console.log('💾 VideoContext: Saving to shared storage...');
-      await setSharedData(SHARED_GRID_KEY, updatedVideos);
+      await setSharedData(gridKey, updatedVideos);
       console.log('✅ VideoContext: Saved to shared storage');
 
       // Track user's contribution (replace existing record for this user)
@@ -444,7 +569,8 @@ export function VideoProvider({ children }) {
       setUserContributions(updatedContributions);
       console.log('👤 VideoContext: Updated user contributions:', Array.from(updatedContributions));
 
-      const allContributionsRaw = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const contribsKey = getGridKey(gridNum, 'contributions');
+      const allContributionsRaw = await getSharedData(contribsKey);
       const allContributions = Array.isArray(allContributionsRaw) ? allContributionsRaw : [];
       const filtered = allContributions.filter(c => c.userEmail !== userEmail);
       filtered.push({
@@ -454,11 +580,12 @@ export function VideoProvider({ children }) {
         username: user.username || user.email,
         timestamp: new Date().toISOString(),
       });
-      await setSharedData(SHARED_CONTRIBUTIONS_KEY, filtered);
+      await setSharedData(contribsKey, filtered);
       console.log('✅ VideoContext: Updated contributions in shared storage');
-
-      // Skip localhost server - data is already saved to localStorage
       
+      // Store which grid this user contributed to (if not already set)
+      await setUserContributedGridNumberInStorage(gridNum);
+
       // Check if grid is complete
       if (updatedVideos.every(v => v !== null)) {
         await handleGridCompletion();
@@ -475,7 +602,24 @@ export function VideoProvider({ children }) {
   // Function to update individual takes for a slot
   const updateVideoTakesAtIndex = async (index, take1, take2, take3) => {
     try {
-      console.log('updateVideoTakesAtIndex called with index:', index, 'takes:', { take1: !!take1, take2: !!take2, take3: !!take3 });
+      // Check if user has already contributed to a grid
+      let gridNum;
+      const userGridNum = await getUserContributedGridNumber();
+      
+      if (userGridNum !== null) {
+        // User has already contributed - use their grid
+        gridNum = userGridNum;
+        console.log(`👤 User has contributed to grid ${gridNum}, using that grid for takes`);
+      } else {
+        // User hasn't contributed yet - ensure we have an active grid that isn't full
+        gridNum = await ensureActiveGrid();
+        setActiveGridNumber(gridNum);
+      }
+      
+      setCurrentGridNumber(gridNum);
+      setCurrentGridId(`shared-grid-${gridNum}`);
+      
+      console.log('updateVideoTakesAtIndex called with index:', index, 'takes:', { take1: !!take1, take2: !!take2, take3: !!take3 }, 'gridNum:', gridNum);
 
       // Upload each take
       const uploadedTakes = { take1: null, take2: null, take3: null };
@@ -495,8 +639,12 @@ export function VideoProvider({ children }) {
       updatedTakes[index] = uploadedTakes;
       setVideoTakes(updatedTakes);
 
-      // Save to shared storage
-      await setSharedData(SHARED_VIDEO_TAKES_KEY, updatedTakes);
+      // Save to grid-specific shared storage
+      const takesKey = getGridKey(gridNum, 'takes');
+      await setSharedData(takesKey, updatedTakes);
+
+      // Store which grid this user contributed to (if not already set)
+      await setUserContributedGridNumberInStorage(gridNum);
 
       // Also update the main video with the merged version (for backward compatibility)
       if (take1 && take2 && take3) {
@@ -514,33 +662,126 @@ export function VideoProvider({ children }) {
 
   const handleGridCompletion = async () => {
     try {
-      console.log('Grid completed with 16 videos! Creating final mosaic...');
-
+      console.log(`✅ Grid ${activeGridNumber} completed with 16 videos!`);
+      
       // Build recipients from shared contributions
-      const sharedContribs = await getSharedData(SHARED_CONTRIBUTIONS_KEY);
+      const gridContribsKey = getGridKey(activeGridNumber, 'contributions');
+      const sharedContribs = await getSharedData(gridContribsKey);
       const emails = Array.isArray(sharedContribs)
         ? [...new Set(sharedContribs.map(c => c.userEmail).filter(Boolean))]
         : [];
 
-      // Persist current videos
-      const safeVideos = Array.isArray(videos) ? videos : Array(16).fill(null);
+      console.log(`🎉 Grid ${activeGridNumber} completed! Contributors:`, emails.length);
+      console.log('📦 Grid preserved - users can still view it');
 
-      // Skip localhost finalize - grid completion handled locally
-      console.log('Grid completed locally:', safeVideos);
-
-      // Reset for new grid
-      setVideos(Array(16).fill(null));
-      setVideoTakes(Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
-      setUserContributions(new Set());
-      await setSharedData(SHARED_GRID_KEY, Array(16).fill(null));
-      await setSharedData(SHARED_VIDEO_TAKES_KEY, Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
-      await setSharedData(SHARED_CONTRIBUTIONS_KEY, []);
-
-      const newGridId = `shared-grid-${Date.now()}`;
-      setCurrentGridId(newGridId);
-      console.log('New grid created:', newGridId);
+      // Don't reset - keep the completed grid visible
+      // The next user will automatically create a new grid when they try to contribute
     } catch (error) {
       console.error('Error handling grid completion:', error);
+    }
+  };
+
+  // Get or create the active grid number
+  const getActiveGridNumber = async () => {
+    try {
+      const stored = await getSharedData(ACTIVE_GRID_KEY);
+      if (typeof stored === 'number' && stored > 0) {
+        return stored;
+      }
+      // Default to grid 1 if not set
+      await setSharedData(ACTIVE_GRID_KEY, 1);
+      return 1;
+    } catch (error) {
+      console.error('Error getting active grid number:', error);
+      return 1;
+    }
+  };
+
+  // Check if a specific grid is full
+  const isGridFull = async (gridNum) => {
+    try {
+      const gridKey = getGridKey(gridNum, 'grid');
+      const gridVideos = await getSharedData(gridKey);
+      if (!Array.isArray(gridVideos)) return false;
+      return gridVideos.filter(v => v !== null).length >= 16;
+    } catch (error) {
+      console.error('Error checking if grid is full:', error);
+      return false;
+    }
+  };
+
+  // Ensure we have an active grid that isn't full, creating a new one if needed
+  const ensureActiveGrid = async () => {
+    try {
+      let currentActive = await getActiveGridNumber();
+      let isFull = await isGridFull(currentActive);
+      
+      // If current grid is full, create next grid
+      if (isFull) {
+        currentActive += 1;
+        console.log(`📦 Current grid ${currentActive - 1} is full, creating grid ${currentActive}`);
+        
+        // Initialize new grid with empty data
+        await setSharedData(getGridKey(currentActive, 'grid'), Array(16).fill(null));
+        await setSharedData(getGridKey(currentActive, 'takes'), Array(16).fill(null).map(() => ({ take1: null, take2: null, take3: null })));
+        await setSharedData(getGridKey(currentActive, 'contributions'), []);
+        
+        // Update active grid number
+        await setSharedData(ACTIVE_GRID_KEY, currentActive);
+        setActiveGridNumber(currentActive);
+        setCurrentGridId(`shared-grid-${currentActive}`);
+      }
+      
+      return currentActive;
+    } catch (error) {
+      console.error('Error ensuring active grid:', error);
+      return activeGridNumber;
+    }
+  };
+
+  // Get which grid a user has contributed to
+  const getUserContributedGridNumber = async () => {
+    try {
+      if (!userEmail) return null;
+      
+      const userGridMapping = await getSharedData(USER_GRID_MAPPING_KEY);
+      if (!Array.isArray(userGridMapping)) return null;
+      
+      const userEntry = userGridMapping.find(entry => entry.userEmail === userEmail);
+      if (userEntry && typeof userEntry.gridNumber === 'number') {
+        return userEntry.gridNumber;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error getting user contributed grid number:', error);
+      return null;
+    }
+  };
+
+  // Set which grid a user has contributed to
+  const setUserContributedGridNumberInStorage = async (gridNum) => {
+    try {
+      if (!userEmail) return;
+      
+      const userGridMapping = await getSharedData(USER_GRID_MAPPING_KEY);
+      const mapping = Array.isArray(userGridMapping) ? [...userGridMapping] : [];
+      
+      // Remove existing entry for this user
+      const filtered = mapping.filter(entry => entry.userEmail !== userEmail);
+      
+      // Add new entry
+      filtered.push({
+        userEmail: userEmail,
+        userId: user.userId,
+        gridNumber: gridNum,
+        timestamp: new Date().toISOString()
+      });
+      
+      await setSharedData(USER_GRID_MAPPING_KEY, filtered);
+      setUserContributedGridNumber(gridNum); // Update state
+      console.log(`✅ Set user contributed grid number to ${gridNum}`);
+    } catch (error) {
+      console.error('Error setting user contributed grid number:', error);
     }
   };
 
@@ -676,6 +917,9 @@ export function VideoProvider({ children }) {
       isLoading, 
       getS3VideoUrl,
       currentGridId,
+      activeGridNumber,
+      currentGridNumber,
+      userContributedGridNumber,
       user,
       error,
       canContributeToPosition,
@@ -684,7 +928,10 @@ export function VideoProvider({ children }) {
       forceSyncFromShared,
       syncUserAcrossContexts,
       signInWithGoogle,
-      signOutUser
+      signOutUser,
+      isGridFull,
+      ensureActiveGrid,
+      getUserContributedGridNumber
     }}>
       {children}
     </VideoContext.Provider>
