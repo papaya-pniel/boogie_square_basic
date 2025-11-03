@@ -25,8 +25,6 @@ export default function MainGrid() {
     getS3VideoUrl, 
         canContributeToPosition,
         userContributions,
-        clearSharedGrid,
-        forceSyncFromShared,
         user,
         activeGridNumber,
         currentGridNumber,
@@ -397,50 +395,6 @@ export default function MainGrid() {
       </div>
 
 
-      {/* Synchronized Playback Status */}
-      <div className="flex flex-col items-center gap-4 mt-8">
-        {/* Playback Status */}
-        <div className="text-center">
-          <div className="text-2xl font-bold text-cyan-400 mb-2">
-            🎬 Take {currentTake} Playing
-          </div>
-          <div className="text-sm text-gray-400">
-            All squares showing Take {currentTake} videos
-          </div>
-        </div>
-        
-            {/* Controls */}
-            <div className="flex gap-4">
-              <Button
-                onClick={async () => {
-                  if (confirm('Clear all videos from the grid? This will reset everything for testing.')) {
-                    await clearSharedGrid();
-                    window.location.reload();
-                  }
-                }}
-                className="bg-gray-600 hover:bg-gray-700 px-6 py-3"
-              >
-                🗑️ Clear Grid (Testing)
-              </Button>
-              <Button
-                onClick={async () => {
-                  console.log('🔄 Manual sync triggered by user');
-                  await forceSyncFromShared();
-                }}
-                className="bg-blue-600 hover:bg-blue-700 px-6 py-3"
-              >
-                🔄 Force Sync
-              </Button>
-            </div>
-        
-        {/* Instructions */}
-        <div className="text-center text-sm text-gray-400 max-w-md">
-          <p>
-            🎵 All squares are playing Take {currentTake} videos in sync. 
-            The takes automatically cycle every 4 seconds: Take 1 → Take 2 → Take 3 → repeat.
-          </p>
-        </div>
-      </div>
 
       {/* Audio Player */}
       <audio ref={audioRef} autoPlay loop className="hidden">
