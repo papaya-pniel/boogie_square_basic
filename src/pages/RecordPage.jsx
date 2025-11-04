@@ -183,7 +183,8 @@ export default function RecordPage() {
       console.log('✅ All takes saved. User contributed to grid:', userGridNum);
       
       // Directly return to grid - no preview step
-      window.location.href = '/';
+      // Add parameter to show completion popup
+      window.location.href = '/?justRecorded=true';
     } catch (e) {
       console.error(e);
       setUploadError('Failed to save videos. Please try again.');

@@ -1,6 +1,6 @@
 // src/pages/MainGrid.jsx
 import React, { useContext, useState, useRef, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
 import AuthButton from "../components/AuthButton";
@@ -46,9 +46,22 @@ export default function MainGrid() {
   const audioRef = useRef();
   const totalSlots = 16; // Always 16 squares
   const [allTakeUrls, setAllTakeUrls] = useState([]); // Store URLs for all takes (for zero-delay switching)
+  const [showCompletionPopup, setShowCompletionPopup] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Track which takes have been started (using ref to avoid re-renders)
   const videosStartedRef = useRef({});
+  
+  // Check if user just completed recording
+  useEffect(() => {
+    const justRecorded = searchParams.get('justRecorded');
+    if (justRecorded === 'true') {
+      setShowCompletionPopup(true);
+      // Remove the parameter from URL
+      searchParams.delete('justRecorded');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Preload all takes for seamless transitions
   useEffect(() => {
@@ -100,139 +113,76 @@ export default function MainGrid() {
     };
   }, [videoTakes, getS3VideoUrl]);
 
-  // Synchronize all videos of the current take across all squares
-  // Ensures all squares show the same take at the exact same playback position
-  // Also ensures all videos start playing simultaneously on first load
+  // Load and start ALL takes for all slots at once (so they're always playing and ready)
+  // This ensures seamless switching - no reloading needed
   useEffect(() => {
-    const takeKey = `take${currentTake}`;
+    // Only run once when allTakeUrls are loaded
+    if (!allTakeUrls || allTakeUrls.length === 0) return;
     
-    // Use data-take attribute to find videos (fixed selector)
-    const getVideoElements = () => {
-      return document.querySelectorAll(`video[data-take="${currentTake}"]`);
+    // Get ALL video elements (all three takes for all slots)
+    const getAllVideoElements = () => {
+      return document.querySelectorAll('video[data-take]');
     };
     
-    let videoElements = getVideoElements();
-    
-    // If no videos found, wait a bit and try again
-    if (videoElements.length === 0) {
-      const retryTimeout = setTimeout(() => {
-        videoElements = getVideoElements();
-      }, 100);
-      return () => clearTimeout(retryTimeout);
-    }
-    
-    // Check if we've already started videos for this take
-    const hasStartedForTake = videosStartedRef.current[takeKey] || false;
-    
-    // Wait for videos to be ready before starting them
-    const checkAndStart = () => {
-      // Refresh video elements in case DOM changed
-      videoElements = getVideoElements();
-      const allVideos = Array.from(videoElements);
+    // Start all videos once
+    const startAllVideos = () => {
+      const allVideoElements = getAllVideoElements();
+      const videosWithSrc = Array.from(allVideoElements).filter(v => v.src && v.src.trim() !== '');
       
-      // Filter out videos that don't have a src (empty slots)
-      const videosWithSrc = allVideos.filter(v => v.src && v.src.trim() !== '');
+      if (videosWithSrc.length === 0) return;
       
-      if (videosWithSrc.length === 0) {
-        return;
-      }
-      
-      // Use readyState >= 2 (HAVE_CURRENT_DATA)
+      // Wait for all videos to be ready
       const readyVideos = videosWithSrc.filter(v => v.readyState >= 2);
       
-      // Wait for ALL videos (that have a src) to be ready before starting
-      if (videosWithSrc.length > 0 && readyVideos.length === videosWithSrc.length) {
-        // First time starting - reset all to beginning and start simultaneously
-        if (!hasStartedForTake) {
-          // Reset all ready videos to beginning
-          readyVideos.forEach(video => {
-            video.pause();
-            video.currentTime = 0;
-          });
-          
-          // Small delay to ensure all videos are paused and reset
-          setTimeout(() => {
-            // Start all ready videos simultaneously
-            Promise.all(
-              readyVideos.map(video => {
-                return video.play().catch((err) => {
-                  console.warn('Autoplay failed for video:', err);
-                  return Promise.resolve();
-                });
-              })
-            ).then(() => {
-              // After all videos start, sync them to the same time
-              if (readyVideos.length > 0) {
-                const referenceTime = readyVideos[0].currentTime;
-                readyVideos.forEach((video, index) => {
+      if (readyVideos.length === videosWithSrc.length && readyVideos.length > 0) {
+        // Reset all to beginning
+        readyVideos.forEach(video => {
+          video.pause();
+          video.currentTime = 0;
+        });
+        
+        // Start all videos simultaneously
+        setTimeout(() => {
+          Promise.all(
+            readyVideos.map(video => {
+              return video.play().catch((err) => {
+                console.warn('Autoplay failed for video:', err);
+                return Promise.resolve();
+              });
+            })
+          ).then(() => {
+            // Sync all videos of the same take together
+            for (let take = 1; take <= 3; take++) {
+              const takeVideos = Array.from(readyVideos).filter(v => 
+                v.getAttribute('data-take') === String(take)
+              );
+              if (takeVideos.length > 0) {
+                const referenceTime = takeVideos[0].currentTime;
+                takeVideos.forEach((video, index) => {
                   if (index > 0) {
                     video.currentTime = referenceTime;
                   }
                 });
-                videosStartedRef.current[takeKey] = true;
-                setVideosStarted(true);
               }
-            });
-          }, 50);
-        } else {
-          // Subsequent syncs - ensure all ready videos are playing and synced
-          if (readyVideos.length > 0) {
-            const referenceVideo = readyVideos[0];
-            const referenceTime = referenceVideo.currentTime;
-            
-            readyVideos.forEach((video, index) => {
-              if (index > 0) {
-                if (Math.abs(video.currentTime - referenceTime) > 0.1) {
-                  video.currentTime = referenceTime;
-                }
-              }
-              if (video.paused) {
-                video.play().catch(() => {});
-              }
-            });
-          }
-        }
+            }
+            videosStartedRef.current.allStarted = true;
+            setVideosStarted(true);
+          });
+        }, 50);
       }
     };
     
-    // Check immediately
-    checkAndStart();
-    
-    // Check periodically
-    const checkInterval = setInterval(checkAndStart, 100);
-    
-    // Fallback: if videos don't start within 2 seconds, start whatever is ready
-    const fallbackTimeout = setTimeout(() => {
-      if (!videosStartedRef.current[takeKey]) {
-        videoElements = getVideoElements();
-        const allVideos = Array.from(videoElements);
-        const videosWithSrc = allVideos.filter(v => v.src && v.src.trim() !== '');
-        const readyVideos = videosWithSrc.filter(v => v.readyState >= 1);
-        
-        if (readyVideos.length > 0) {
-          readyVideos.forEach(video => {
-            video.currentTime = 0;
-            video.play().catch(() => {});
-          });
-          videosStartedRef.current[takeKey] = true;
-          setVideosStarted(true);
-        }
-      }
-    }, 2000);
-    
-    // Sync periodically to prevent drift
-    const syncInterval = setInterval(() => {
-      if (!videosStartedRef.current[takeKey]) return;
+    // Sync all videos of a specific take
+    const syncTake = (takeNum) => {
+      const takeVideos = Array.from(document.querySelectorAll(`video[data-take="${takeNum}"]`))
+        .filter(v => v.src && v.src.trim() !== '');
       
-      videoElements = getVideoElements();
-      const allVideos = Array.from(videoElements);
-      const readyVideos = allVideos.filter(v => v.readyState >= 2 && v.src);
-      if (readyVideos.length === 0) return;
+      if (takeVideos.length === 0) return;
       
-      const referenceVideo = readyVideos[0];
+      const referenceVideo = takeVideos[0];
       const referenceTime = referenceVideo.currentTime;
       
-      readyVideos.forEach((video, index) => {
+      takeVideos.forEach((video, index) => {
         if (index > 0) {
           if (Math.abs(video.currentTime - referenceTime) > 0.1) {
             video.currentTime = referenceTime;
@@ -242,6 +192,76 @@ export default function MainGrid() {
           video.play().catch(() => {});
         }
       });
+    };
+    
+    // Sync all takes (so they stay in sync even when hidden)
+    const syncAllTakes = () => {
+      for (let take = 1; take <= 3; take++) {
+        syncTake(take);
+      }
+    };
+    
+    let allVideoElements = getAllVideoElements();
+    
+    // If no videos found, wait a bit and try again
+    if (allVideoElements.length === 0) {
+      const retryTimeout = setTimeout(() => {
+        allVideoElements = getAllVideoElements();
+        if (allVideoElements.length > 0) {
+          startAllVideos();
+        }
+      }, 100);
+      return () => clearTimeout(retryTimeout);
+    }
+    
+    // Check if we've already started all videos
+    if (videosStartedRef.current.allStarted) {
+      // Sync all takes to keep them in sync
+      syncAllTakes();
+      return;
+    }
+    
+    // Start all videos
+    startAllVideos();
+    
+    // Check periodically for videos that become ready
+    const checkInterval = setInterval(() => {
+      if (!videosStartedRef.current.allStarted) {
+        startAllVideos();
+      } else {
+        // Sync all takes periodically so they stay in sync even when hidden
+        syncAllTakes();
+      }
+    }, 100);
+    
+    // Fallback: start whatever is ready after 2 seconds
+    const fallbackTimeout = setTimeout(() => {
+      if (!videosStartedRef.current.allStarted) {
+        const allVideoElements = getAllVideoElements();
+        const videosWithSrc = Array.from(allVideoElements).filter(v => v.src && v.src.trim() !== '');
+        const readyVideos = videosWithSrc.filter(v => v.readyState >= 1);
+        
+        if (readyVideos.length > 0) {
+          readyVideos.forEach(video => {
+            if (video.paused) {
+              video.play().catch(() => {});
+            }
+          });
+          // Sync all takes after starting
+          setTimeout(() => {
+            syncAllTakes();
+          }, 100);
+          videosStartedRef.current.allStarted = true;
+          setVideosStarted(true);
+        }
+      }
+    }, 2000);
+    
+    // Sync all takes periodically to prevent drift
+    const syncInterval = setInterval(() => {
+      if (videosStartedRef.current.allStarted) {
+        syncAllTakes();
+      }
     }, 100);
     
     return () => {
@@ -249,7 +269,7 @@ export default function MainGrid() {
       clearInterval(syncInterval);
       clearTimeout(fallbackTimeout);
     };
-  }, [currentTake, allTakeUrls]);
+  }, [allTakeUrls, currentTake]);
 
 
   // Create padded array for mapping (16 slots total)
@@ -468,7 +488,7 @@ export default function MainGrid() {
                           preload="auto"
                           className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
                           style={{ 
-                            opacity: currentTake === 1 && (videosStarted || videosStartedRef.current[`take1`]) ? 1 : 0,
+                            opacity: currentTake === 1 && videosStartedRef.current.allStarted ? 1 : 0,
                             pointerEvents: currentTake === 1 ? 'auto' : 'none'
                           }}
                         />
@@ -486,7 +506,7 @@ export default function MainGrid() {
                           preload="auto"
                           className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
                           style={{ 
-                            opacity: currentTake === 2 && (videosStarted || videosStartedRef.current[`take2`]) ? 1 : 0,
+                            opacity: currentTake === 2 && videosStartedRef.current.allStarted ? 1 : 0,
                             pointerEvents: currentTake === 2 ? 'auto' : 'none'
                           }}
                         />
@@ -504,7 +524,7 @@ export default function MainGrid() {
                           preload="auto"
                           className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
                           style={{ 
-                            opacity: currentTake === 3 && (videosStarted || videosStartedRef.current[`take3`]) ? 1 : 0,
+                            opacity: currentTake === 3 && videosStartedRef.current.allStarted ? 1 : 0,
                             pointerEvents: currentTake === 3 ? 'auto' : 'none'
                           }}
                         />
@@ -546,6 +566,35 @@ export default function MainGrid() {
       <audio ref={audioRef} autoPlay loop className="hidden">
         <source src={`/music/${selectedSong}`} type="audio/mp3" />
       </audio>
+
+      {/* Completion Popup Modal */}
+      {showCompletionPopup && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+          <div className="bg-white text-black rounded-lg p-8 max-w-md mx-4 shadow-2xl">
+            <h2 className="text-3xl font-bold mb-4 text-center">🎉 Recording Complete!</h2>
+            <p className="text-gray-700 mb-6 text-center">
+              Thank you for your contribution! Your video has been saved to the grid.
+            </p>
+            <div className="flex flex-col gap-4">
+              <a
+                href="https://docs.google.com/forms/d/1HqmP4Zw-wgC_CSIkvhqnuFKqXjSOfaxHNe12_34zrwg/edit?ts=6908e4ed"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg text-center transition-colors"
+              >
+                Visit Our Website →
+              </a>
+              <Button
+                onClick={() => setShowCompletionPopup(false)}
+                variant="secondary"
+                className="w-full"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
