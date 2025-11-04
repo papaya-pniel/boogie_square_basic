@@ -582,7 +582,7 @@ export default function MainGrid() {
                 rel="noopener noreferrer"
                 className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg text-center transition-colors"
               >
-                Visit Our Website →
+                Give Us Feedback →
               </a>
               <Button
                 onClick={() => setShowCompletionPopup(false)}
