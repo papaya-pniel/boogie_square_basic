@@ -1,5 +1,5 @@
 // src/pages/MainGrid.jsx
-import React, { useContext, useState, useRef, useEffect } from "react";
+import React, { useContext, useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
@@ -45,7 +45,10 @@ export default function MainGrid() {
 
   const audioRef = useRef();
   const totalSlots = 16; // Always 16 squares
-  const [allTakeUrls, setAllTakeUrls] = useState([]); // Store URLs for all takes (for zero-delay switching)
+  const createEmptyTakeRecord = () => ({ take1: null, take2: null, take3: null });
+  const createInitialTakeUrls = () => Array.from({ length: totalSlots }, () => createEmptyTakeRecord());
+  const [allTakeUrls, setAllTakeUrls] = useState(() => createInitialTakeUrls()); // Store URLs for loaded takes
+  const allTakeUrlsRef = useRef(allTakeUrls);
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -63,61 +66,75 @@ export default function MainGrid() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Preload all takes for seamless transitions
   useEffect(() => {
-    let isMounted = true;
-    
-    async function preloadAllTakes() {
-      try {
-        const allUrls = await Promise.all(
-          videoTakes.map(async (takes, index) => {
-            if (!takes || (!takes.take1 && !takes.take2 && !takes.take3)) {
-              return { take1: null, take2: null, take3: null };
-            }
-            
-            const takeUrls = { take1: null, take2: null, take3: null };
-            
-            // Preload all takes for this slot
-            for (let takeNum = 1; takeNum <= 3; takeNum++) {
-              const takeKey = `take${takeNum}`;
-              const takeVideo = takes[takeKey];
-              
-              if (takeVideo) {
-                try {
-                  const url = await getS3VideoUrl(takeVideo);
-                  if (url) {
-                    takeUrls[takeKey] = url;
-                  }
-                } catch (error) {
-                  console.error(`Error preloading take ${takeNum} for slot ${index}:`, error);
-                }
+    allTakeUrlsRef.current = allTakeUrls;
+  }, [allTakeUrls]);
+
+  const preloadTake = useCallback(
+    async (takeNum) => {
+      const takeKey = `take${takeNum}`;
+      await Promise.all(
+        videoTakes.map(async (takes, index) => {
+          if (!takes || !takes[takeKey]) return;
+          if (allTakeUrlsRef.current[index]?.[takeKey]) return;
+          try {
+            const url = await getS3VideoUrl(takes[takeKey]);
+            if (!url) return;
+            setAllTakeUrls((prev) => {
+              if (prev[index]?.[takeKey] === url) {
+                return prev;
               }
-            }
-            
-            return takeUrls;
-          })
-        );
-        
-        if (isMounted) {
-          setAllTakeUrls(allUrls);
-        }
-      } catch (error) {
-        console.error('Error preloading takes:', error);
-      }
-    }
-    
-    preloadAllTakes();
-    
-    return () => {
-      isMounted = false;
+              const next = prev.map((slot, idx) =>
+                idx === index ? { ...slot, [takeKey]: url } : slot
+              );
+              return next;
+            });
+          } catch (error) {
+            console.error(`Error preloading take ${takeNum} for slot ${index}:`, error);
+          }
+        })
+      );
+    },
+    [videoTakes, getS3VideoUrl]
+  );
+
+  // Reset cached URLs when takes data changes
+  useEffect(() => {
+    const initial = createInitialTakeUrls();
+    setAllTakeUrls(initial);
+    allTakeUrlsRef.current = initial;
+    preloadTake(1);
+  }, [videoTakes, preloadTake]);
+
+  // Prefetch current and upcoming takes just-in-time
+  useEffect(() => {
+    let cancelled = false;
+    const loadCurrent = async () => {
+      await preloadTake(currentTake);
     };
-  }, [videoTakes, getS3VideoUrl]);
+    loadCurrent();
+
+    const nextTake = currentTake === 3 ? 1 : currentTake + 1;
+    const timer = setTimeout(() => {
+      if (!cancelled) {
+        preloadTake(nextTake);
+      }
+    }, 1500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [currentTake, preloadTake]);
 
   // Load and start ALL takes for all slots at once (so they're always playing and ready)
   // This ensures seamless switching - no reloading needed
   useEffect(() => {
     // Only run once when allTakeUrls are loaded
-    if (!allTakeUrls || allTakeUrls.length === 0) return;
+    const hasLoadedTakes = allTakeUrls.some(
+      (slot) => slot && (slot.take1 || slot.take2 || slot.take3)
+    );
+    if (!hasLoadedTakes) return;
     
     // Get ALL video elements (all three takes for all slots)
     const getAllVideoElements = () => {
