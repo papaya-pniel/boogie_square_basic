@@ -36,6 +36,9 @@ export default function MainGrid() {
   const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
   const [gridReady, setGridReady] = useState(false);
 
+  const SYNC_INTERVAL_MS = 500;
+  const DRIFT_TOLERANCE = 0.25;
+
   // Synchronized playback state - always playing
   const [isPlaying, setIsPlaying] = useState(true);
   const [currentTake, setCurrentTake] = useState(1); // 1, 2, or 3
@@ -201,7 +204,7 @@ export default function MainGrid() {
       
       takeVideos.forEach((video, index) => {
         if (index > 0) {
-          if (Math.abs(video.currentTime - referenceTime) > 0.1) {
+          if (Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
             video.currentTime = referenceTime;
           }
         }
@@ -249,7 +252,7 @@ export default function MainGrid() {
         // Sync all takes periodically so they stay in sync even when hidden
         syncAllTakes();
       }
-    }, 100);
+    }, SYNC_INTERVAL_MS);
     
     // Fallback: start whatever is ready after 2 seconds
     const fallbackTimeout = setTimeout(() => {
@@ -267,7 +270,7 @@ export default function MainGrid() {
           // Sync all takes after starting
           setTimeout(() => {
             syncAllTakes();
-          }, 100);
+          }, SYNC_INTERVAL_MS);
           videosStartedRef.current.allStarted = true;
           setVideosStarted(true);
         }
@@ -279,7 +282,7 @@ export default function MainGrid() {
       if (videosStartedRef.current.allStarted) {
         syncAllTakes();
       }
-    }, 100);
+    }, SYNC_INTERVAL_MS);
     
     return () => {
       clearInterval(checkInterval);
