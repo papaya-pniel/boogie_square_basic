@@ -114,7 +114,7 @@ export default function MainGrid() {
   }, [videoTakes, preloadTake]);
 
   // Prefetch current and upcoming takes just-in-time
-  // On mobile, preload next take closer to switch time to save memory
+  // On mobile, preload next take immediately for smooth switching
   useEffect(() => {
     let cancelled = false;
     const loadCurrent = async () => {
@@ -123,8 +123,9 @@ export default function MainGrid() {
     loadCurrent();
 
     const nextTake = currentTake === 3 ? 1 : currentTake + 1;
-    // On mobile, preload later (2.5s before switch) vs desktop (1.5s)
-    const preloadDelay = isMobile ? 2500 : 1500;
+    // On mobile, preload next take immediately (for 2-video swap strategy)
+    // On desktop, preload 1.5s before switch
+    const preloadDelay = isMobile ? 500 : 1500;
     const timer = setTimeout(() => {
       if (!cancelled) {
         preloadTake(nextTake);
@@ -222,10 +223,12 @@ export default function MainGrid() {
     };
     
     // Sync all takes (so they stay in sync even when hidden)
-    // On mobile, only sync the current take to save resources
+    // On mobile, sync current + next take (for 2-video swap strategy)
     const syncAllTakes = () => {
       if (isMobile) {
         syncTake(currentTake);
+        const nextTake = currentTake === 3 ? 1 : currentTake + 1;
+        syncTake(nextTake);
       } else {
         for (let take = 1; take <= 3; take++) {
           syncTake(take);
@@ -303,36 +306,66 @@ export default function MainGrid() {
     };
   }, [allTakeUrls, currentTake]);
 
-  // On mobile: handle video src changes when switching takes
+  // On mobile: handle smooth take switching with opacity swap
   useEffect(() => {
     if (!isMobile) return;
     
-    const handleVideoLoad = () => {
-      const videos = document.querySelectorAll('video[data-take]');
-      videos.forEach(video => {
+    const handleTakeSwitch = () => {
+      // Get all video elements
+      const allVideos = Array.from(document.querySelectorAll('video[data-take]'))
+        .filter(v => v.src && v.src.trim() !== '');
+      
+      if (allVideos.length === 0) return;
+      
+      // Separate current and next take videos
+      const currentTakeVideos = allVideos.filter(v => 
+        v.getAttribute('data-take') === String(currentTake)
+      );
+      const nextTake = currentTake === 3 ? 1 : currentTake + 1;
+      const nextTakeVideos = allVideos.filter(v => 
+        v.getAttribute('data-take') === String(nextTake)
+      );
+      
+      // Start all videos playing (both current and next)
+      // This ensures the next take is already playing when we switch
+      allVideos.forEach(video => {
         if (video.readyState >= 2) {
-          video.currentTime = 0;
-          video.play().catch(() => {});
+          if (video.paused) {
+            // Sync next take videos to current take's time for smooth transition
+            const isNextTake = video.getAttribute('data-take') === String(nextTake);
+            if (isNextTake && currentTakeVideos.length > 0 && currentTakeVideos[0].currentTime > 0) {
+              video.currentTime = currentTakeVideos[0].currentTime;
+            } else {
+              video.currentTime = 0;
+            }
+            video.play().catch(() => {});
+          }
         }
       });
       
-      // Sync all videos of current take
-      setTimeout(() => {
-        const takeVideos = Array.from(document.querySelectorAll(`video[data-take="${currentTake}"]`))
-          .filter(v => v.src && v.src.trim() !== '');
-        if (takeVideos.length > 0) {
-          const referenceTime = takeVideos[0].currentTime;
-          takeVideos.forEach((video, index) => {
-            if (index > 0 && Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
-              video.currentTime = referenceTime;
-            }
-          });
-        }
-      }, 100);
+      // Swap opacity: show current, hide next
+      currentTakeVideos.forEach(video => {
+        video.style.opacity = '1';
+        video.style.pointerEvents = 'auto';
+      });
+      nextTakeVideos.forEach(video => {
+        video.style.opacity = '0';
+        video.style.pointerEvents = 'none';
+      });
+      
+      // Sync current take videos
+      if (currentTakeVideos.length > 0) {
+        const referenceTime = currentTakeVideos[0].currentTime;
+        currentTakeVideos.forEach((video, index) => {
+          if (index > 0 && Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
+            video.currentTime = referenceTime;
+          }
+        });
+      }
     };
     
-    // Wait a bit for videos to load after take change
-    const timer = setTimeout(handleVideoLoad, 200);
+    // Wait a bit for DOM to update
+    const timer = setTimeout(handleTakeSwitch, 50);
     
     return () => clearTimeout(timer);
   }, [currentTake, isMobile, allTakeUrls]);
@@ -537,22 +570,45 @@ export default function MainGrid() {
             >
               {hasAnyRecording ? (
                 <>
-                  {/* On mobile: single video element that switches src. On desktop: all 3 takes preloaded */}
+                  {/* On mobile: two video elements (current + next) for smooth switching. On desktop: all 3 takes preloaded */}
                   {isMobile ? (
-                    // Mobile: single video element per slot
-                    allTakeUrls[idx] && allTakeUrls[idx][`take${currentTake}`] && (
-                      <video
-                        key={`${idx}-mobile-${currentTake}`}
-                        data-take={String(currentTake)}
-                        data-slot={idx}
-                        src={allTakeUrls[idx][`take${currentTake}`]}
-                        autoPlay={false}
-                        muted
-                        loop
-                        playsInline
-                        preload="auto"
-                        className="absolute inset-0 w-full h-full object-cover z-0"
-                      />
+                    // Mobile: current + next take for smooth transitions
+                    allTakeUrls[idx] && (
+                      <>
+                        {allTakeUrls[idx][`take${currentTake}`] && (
+                          <video
+                            key={`${idx}-mobile-current-${currentTake}`}
+                            data-take={String(currentTake)}
+                            data-slot={idx}
+                            src={allTakeUrls[idx][`take${currentTake}`]}
+                            autoPlay={false}
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
+                            className="absolute inset-0 w-full h-full object-cover z-0"
+                            style={{ opacity: 1 }}
+                          />
+                        )}
+                        {(() => {
+                          const nextTake = currentTake === 3 ? 1 : currentTake + 1;
+                          return allTakeUrls[idx][`take${nextTake}`] && (
+                            <video
+                              key={`${idx}-mobile-next-${nextTake}`}
+                              data-take={String(nextTake)}
+                              data-slot={idx}
+                              src={allTakeUrls[idx][`take${nextTake}`]}
+                              autoPlay={false}
+                              muted
+                              loop
+                              playsInline
+                              preload="auto"
+                              className="absolute inset-0 w-full h-full object-cover z-0"
+                              style={{ opacity: 0, pointerEvents: 'none' }}
+                            />
+                          );
+                        })()}
+                      </>
                     )
                   ) : (
                     // Desktop: all 3 takes preloaded for instant switching
