@@ -140,16 +140,17 @@ export default function MainGrid() {
 
   // Load and start ALL takes for all slots at once (so they're always playing and ready)
   // This ensures seamless switching - no reloading needed
+  // Also starts and syncs tutorial videos
   useEffect(() => {
-    // Only run once when allTakeUrls are loaded
+    // Always run - tutorials should start even if no user takes exist yet
     const hasLoadedTakes = allTakeUrls.some(
       (slot) => slot && (slot.take1 || slot.take2 || slot.take3)
     );
-    if (!hasLoadedTakes) return;
+    // Don't return early - tutorials need to start even without user takes
     
-    // Get ALL video elements (all three takes for all slots)
+    // Get ALL video elements (all three takes for all slots + tutorials)
     const getAllVideoElements = () => {
-      return document.querySelectorAll('video[data-take]');
+      return document.querySelectorAll('video[data-take], video[data-tutorial]');
     };
     
     // Start all videos once
@@ -222,6 +223,32 @@ export default function MainGrid() {
       });
     };
     
+    // Sync tutorial videos to current take
+    const syncTutorials = () => {
+      if (isMobile) return; // Tutorials disabled on mobile
+      
+      const tutorialVideos = Array.from(document.querySelectorAll('video[data-tutorial]'))
+        .filter(v => v.src && v.src.trim() !== '');
+      
+      if (tutorialVideos.length === 0) return;
+      
+      // Sync tutorials to current take videos
+      const currentTakeVideos = Array.from(document.querySelectorAll(`video[data-take="${currentTake}"]`))
+        .filter(v => v.src && v.src.trim() !== '');
+      
+      if (currentTakeVideos.length > 0) {
+        const referenceTime = currentTakeVideos[0].currentTime;
+        tutorialVideos.forEach(video => {
+          if (Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
+            video.currentTime = referenceTime;
+          }
+          if (video.paused) {
+            video.play().catch(() => {});
+          }
+        });
+      }
+    };
+    
     // Sync all takes (so they stay in sync even when hidden)
     // On mobile, sync current + next take (for 2-video swap strategy)
     const syncAllTakes = () => {
@@ -233,6 +260,7 @@ export default function MainGrid() {
         for (let take = 1; take <= 3; take++) {
           syncTake(take);
         }
+        syncTutorials(); // Sync tutorials to current take
       }
     };
     
@@ -684,6 +712,8 @@ export default function MainGrid() {
                   {!isMobile && (
                     <video
                       key={`tutorial-${idx}-${currentTake}`}
+                      data-tutorial
+                      data-slot={idx}
                       src={getTutorialSrc(currentTake - 1, idx)}
                       autoPlay
                       muted
