@@ -29,6 +29,13 @@
         "client_id": "YOUR_GOOGLE_CLIENT_ID",
         "client_secret": "YOUR_GOOGLE_CLIENT_SECRET"
       }
+    },
+    "oauth": {
+      "domain": "boogie-square.auth.eu-west-2.amazoncognito.com",
+      "scope": ["email", "profile", "openid", "aws.cognito.signin.user.admin"],
+      "redirectSignIn": ["http://localhost:5173", "https://main.dvzr179hkw8yb.amplifyapp.com"],
+      "redirectSignOut": ["http://localhost:5173", "https://main.dvzr179hkw8yb.amplifyapp.com"],
+      "responseType": "code"
     }
   },
   "data": {

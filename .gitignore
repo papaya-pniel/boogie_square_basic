@@ -30,13 +30,17 @@ pnpm-debug.log*
 /k8s
 Dockerfile
 
+uploads/
+
 #amplify-do-not-edit-begin
 amplify/\#current-cloud-backend
-amplify/.config/local-*
+amplify/.config/
+amplify/backend/
+amplify/cli.json
+amplify/team-provider-info.json
 amplify/logs
 amplify/mock-data
 amplify/mock-api-resources
-amplify/backend/amplify-meta.json
 amplify/backend/.temp
 build/
 dist/
@@ -51,4 +55,3 @@ amplifytools.xcconfig
 .secret-*
 **.sample
 #amplify-do-not-edit-end
-uploads/
