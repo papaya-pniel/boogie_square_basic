@@ -36,7 +36,11 @@ export default function MainGrid() {
   const [gridSize] = useState(4); // Fixed at 4x4 = 16 squares
   const [gridReady, setGridReady] = useState(false);
 
-  const SYNC_INTERVAL_MS = 500;
+  // Detect mobile device
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+                   (typeof window !== 'undefined' && window.innerWidth < 768);
+  
+  const SYNC_INTERVAL_MS = isMobile ? 1000 : 500; // Slower sync on mobile
   const DRIFT_TOLERANCE = 0.25;
 
   // Synchronized playback state - always playing
@@ -110,6 +114,7 @@ export default function MainGrid() {
   }, [videoTakes, preloadTake]);
 
   // Prefetch current and upcoming takes just-in-time
+  // On mobile, preload next take closer to switch time to save memory
   useEffect(() => {
     let cancelled = false;
     const loadCurrent = async () => {
@@ -118,17 +123,19 @@ export default function MainGrid() {
     loadCurrent();
 
     const nextTake = currentTake === 3 ? 1 : currentTake + 1;
+    // On mobile, preload later (2.5s before switch) vs desktop (1.5s)
+    const preloadDelay = isMobile ? 2500 : 1500;
     const timer = setTimeout(() => {
       if (!cancelled) {
         preloadTake(nextTake);
       }
-    }, 1500);
+    }, preloadDelay);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [currentTake, preloadTake]);
+  }, [currentTake, preloadTake, isMobile]);
 
   // Load and start ALL takes for all slots at once (so they're always playing and ready)
   // This ensures seamless switching - no reloading needed
@@ -215,9 +222,14 @@ export default function MainGrid() {
     };
     
     // Sync all takes (so they stay in sync even when hidden)
+    // On mobile, only sync the current take to save resources
     const syncAllTakes = () => {
-      for (let take = 1; take <= 3; take++) {
-        syncTake(take);
+      if (isMobile) {
+        syncTake(currentTake);
+      } else {
+        for (let take = 1; take <= 3; take++) {
+          syncTake(take);
+        }
       }
     };
     
@@ -290,6 +302,40 @@ export default function MainGrid() {
       clearTimeout(fallbackTimeout);
     };
   }, [allTakeUrls, currentTake]);
+
+  // On mobile: handle video src changes when switching takes
+  useEffect(() => {
+    if (!isMobile) return;
+    
+    const handleVideoLoad = () => {
+      const videos = document.querySelectorAll('video[data-take]');
+      videos.forEach(video => {
+        if (video.readyState >= 2) {
+          video.currentTime = 0;
+          video.play().catch(() => {});
+        }
+      });
+      
+      // Sync all videos of current take
+      setTimeout(() => {
+        const takeVideos = Array.from(document.querySelectorAll(`video[data-take="${currentTake}"]`))
+          .filter(v => v.src && v.src.trim() !== '');
+        if (takeVideos.length > 0) {
+          const referenceTime = takeVideos[0].currentTime;
+          takeVideos.forEach((video, index) => {
+            if (index > 0 && Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
+              video.currentTime = referenceTime;
+            }
+          });
+        }
+      }, 100);
+    };
+    
+    // Wait a bit for videos to load after take change
+    const timer = setTimeout(handleVideoLoad, 200);
+    
+    return () => clearTimeout(timer);
+  }, [currentTake, isMobile, allTakeUrls]);
 
 
   // Create padded array for mapping (16 slots total)
@@ -491,65 +537,83 @@ export default function MainGrid() {
             >
               {hasAnyRecording ? (
                 <>
-                  {/* Render all three takes as separate video elements, preloaded and ready */}
-                  {/* This eliminates rebuffering delay when switching takes */}
-                  {allTakeUrls[idx] && (
-                    <>
-                      {allTakeUrls[idx].take1 && (
-                        <video
-                          key={`${idx}-take1`}
-                          data-take="1"
-                          data-slot={idx}
-                          src={allTakeUrls[idx].take1}
-                          autoPlay={false}
-                          muted
-                          loop
-                          playsInline
-                          preload="auto"
-                          className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
-                          style={{ 
-                            opacity: currentTake === 1 && videosStartedRef.current.allStarted ? 1 : 0,
-                            pointerEvents: currentTake === 1 ? 'auto' : 'none'
-                          }}
-                        />
-                      )}
-                      {allTakeUrls[idx].take2 && (
-                        <video
-                          key={`${idx}-take2`}
-                          data-take="2"
-                          data-slot={idx}
-                          src={allTakeUrls[idx].take2}
-                          autoPlay={false}
-                          muted
-                          loop
-                          playsInline
-                          preload="auto"
-                          className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
-                          style={{ 
-                            opacity: currentTake === 2 && videosStartedRef.current.allStarted ? 1 : 0,
-                            pointerEvents: currentTake === 2 ? 'auto' : 'none'
-                          }}
-                        />
-                      )}
-                      {allTakeUrls[idx].take3 && (
-                        <video
-                          key={`${idx}-take3`}
-                          data-take="3"
-                          data-slot={idx}
-                          src={allTakeUrls[idx].take3}
-                          autoPlay={false}
-                          muted
-                          loop
-                          playsInline
-                          preload="auto"
-                          className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
-                          style={{ 
-                            opacity: currentTake === 3 && videosStartedRef.current.allStarted ? 1 : 0,
-                            pointerEvents: currentTake === 3 ? 'auto' : 'none'
-                          }}
-                        />
-                      )}
-                    </>
+                  {/* On mobile: single video element that switches src. On desktop: all 3 takes preloaded */}
+                  {isMobile ? (
+                    // Mobile: single video element per slot
+                    allTakeUrls[idx] && allTakeUrls[idx][`take${currentTake}`] && (
+                      <video
+                        key={`${idx}-mobile-${currentTake}`}
+                        data-take={String(currentTake)}
+                        data-slot={idx}
+                        src={allTakeUrls[idx][`take${currentTake}`]}
+                        autoPlay={false}
+                        muted
+                        loop
+                        playsInline
+                        preload="auto"
+                        className="absolute inset-0 w-full h-full object-cover z-0"
+                      />
+                    )
+                  ) : (
+                    // Desktop: all 3 takes preloaded for instant switching
+                    allTakeUrls[idx] && (
+                      <>
+                        {allTakeUrls[idx].take1 && (
+                          <video
+                            key={`${idx}-take1`}
+                            data-take="1"
+                            data-slot={idx}
+                            src={allTakeUrls[idx].take1}
+                            autoPlay={false}
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
+                            className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
+                            style={{ 
+                              opacity: currentTake === 1 && videosStartedRef.current.allStarted ? 1 : 0,
+                              pointerEvents: currentTake === 1 ? 'auto' : 'none'
+                            }}
+                          />
+                        )}
+                        {allTakeUrls[idx].take2 && (
+                          <video
+                            key={`${idx}-take2`}
+                            data-take="2"
+                            data-slot={idx}
+                            src={allTakeUrls[idx].take2}
+                            autoPlay={false}
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
+                            className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
+                            style={{ 
+                              opacity: currentTake === 2 && videosStartedRef.current.allStarted ? 1 : 0,
+                              pointerEvents: currentTake === 2 ? 'auto' : 'none'
+                            }}
+                          />
+                        )}
+                        {allTakeUrls[idx].take3 && (
+                          <video
+                            key={`${idx}-take3`}
+                            data-take="3"
+                            data-slot={idx}
+                            src={allTakeUrls[idx].take3}
+                            autoPlay={false}
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
+                            className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
+                            style={{ 
+                              opacity: currentTake === 3 && videosStartedRef.current.allStarted ? 1 : 0,
+                              pointerEvents: currentTake === 3 ? 'auto' : 'none'
+                            }}
+                          />
+                        )}
+                      </>
+                    )
                   )}
                   {/* User's own recording indicator */}
                   {hasUserContribution && (
@@ -560,17 +624,19 @@ export default function MainGrid() {
                 </>
               ) : (
                 <>
-                  {/* Tutorial video looping in background for available slots */}
-                  <video
-                    key={`tutorial-${idx}-${currentTake}`}
-                    src={getTutorialSrc(currentTake - 1, idx)}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                    className="absolute inset-0 w-full h-full object-cover opacity-40 z-0 transition-opacity duration-200"
-                    style={{ opacity: 0.4 }}
-                  />
+                  {/* Tutorial video - disabled on mobile to save memory */}
+                  {!isMobile && (
+                    <video
+                      key={`tutorial-${idx}-${currentTake}`}
+                      src={getTutorialSrc(currentTake - 1, idx)}
+                      autoPlay
+                      muted
+                      loop
+                      playsInline
+                      className="absolute inset-0 w-full h-full object-cover opacity-40 z-0 transition-opacity duration-200"
+                      style={{ opacity: 0.4 }}
+                    />
+                  )}
                   {/* Plus icon overlay */}
                   <div className="text-6xl text-cyan-400 z-10 relative">+</div>
                 </>
