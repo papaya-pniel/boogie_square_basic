@@ -579,7 +579,7 @@ export default function MainGrid() {
               <img 
                 src="/logo.png" 
                 alt="Boogie Square" 
-                className={`${isMobile ? 'h-8' : 'h-10'} w-auto object-contain`}
+                className={`${isMobile ? 'h-12' : 'h-16'} w-auto object-contain`}
               />
             </div>
             <div className="flex items-center gap-2">
@@ -664,9 +664,20 @@ export default function MainGrid() {
         </div>
       </div>
 
-      {/* Grid - responsive sizing */}
-      <div 
-        className={`grid gap-0 border border-gray-300 ${isTransitioning ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}
+      {/* Grid Container with Side Swipe Indicators */}
+      <div className="relative flex items-center">
+        {/* Left Swipe Indicator */}
+        {currentGridNumber > 1 && (
+          <div className={`absolute ${isMobile ? '-left-4' : '-left-6'} z-10 pointer-events-none`}>
+            <div className="bg-gray-800/70 backdrop-blur-sm rounded-full p-2 border border-gray-600">
+              <span className={`${isMobile ? 'text-xl' : 'text-2xl'} text-white`}>←</span>
+            </div>
+          </div>
+        )}
+        
+        {/* Grid - responsive sizing */}
+        <div 
+          className={`grid gap-0 border border-gray-300 ${isTransitioning ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}
         style={{
           gridTemplateColumns: `repeat(4, 1fr)`,
           gridTemplateRows: `repeat(4, 1fr)`,
@@ -736,6 +747,16 @@ export default function MainGrid() {
             </div>
           );
         })}
+        </div>
+        
+        {/* Right Swipe Indicator */}
+        {currentGridNumber < activeGridNumber && (
+          <div className={`absolute ${isMobile ? '-right-4' : '-right-6'} z-10 pointer-events-none`}>
+            <div className="bg-gray-800/70 backdrop-blur-sm rounded-full p-2 border border-gray-600">
+              <span className={`${isMobile ? 'text-xl' : 'text-2xl'} text-white`}>→</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Grid Number - below grid */}
@@ -766,7 +787,7 @@ export default function MainGrid() {
         <button
           onClick={() => handleGridChange(Math.max(1, currentGridNumber - 1))}
           disabled={currentGridNumber <= 1 || isTransitioning}
-          className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-3xl' : 'min-w-[40px] min-h-[40px] text-2xl'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-colors`}
+          className={`${isMobile ? 'min-w-[50px] min-h-[50px] text-3xl' : 'min-w-[48px] min-h-[48px] text-2xl'} bg-gray-800/50 hover:bg-gray-700/50 text-white rounded-full border border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-all flex items-center justify-center shadow-lg`}
           aria-label="Previous grid"
         >
           ←
@@ -774,7 +795,7 @@ export default function MainGrid() {
         <button
           onClick={() => handleGridChange(currentGridNumber + 1)}
           disabled={currentGridNumber >= activeGridNumber || isTransitioning}
-          className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-3xl' : 'min-w-[40px] min-h-[40px] text-2xl'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-colors`}
+          className={`${isMobile ? 'min-w-[50px] min-h-[50px] text-3xl' : 'min-w-[48px] min-h-[48px] text-2xl'} bg-gray-800/50 hover:bg-gray-700/50 text-white rounded-full border border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-all flex items-center justify-center shadow-lg`}
           aria-label="Next grid"
         >
           →
