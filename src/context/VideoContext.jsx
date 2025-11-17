@@ -621,18 +621,15 @@ export function VideoProvider({ children }) {
       
       console.log('updateVideoTakesAtIndex called with index:', index, 'takes:', { take1: !!take1, take2: !!take2, take3: !!take3 }, 'gridNum:', gridNum);
 
-      // Upload each take
+      // Upload only take1 (take2 and take3 are no longer used)
       const uploadedTakes = { take1: null, take2: null, take3: null };
       
       if (take1) {
         uploadedTakes.take1 = await uploadVideoToS3(index, take1);
       }
-      if (take2) {
-        uploadedTakes.take2 = await uploadVideoToS3(index, take2);
-      }
-      if (take3) {
-        uploadedTakes.take3 = await uploadVideoToS3(index, take3);
-      }
+      
+      // Note: take2 and take3 are kept as null for backward compatibility with data structure,
+      // but we no longer upload or use them
 
       // Update video takes state
       const updatedTakes = [...videoTakes];
@@ -646,10 +643,9 @@ export function VideoProvider({ children }) {
       // Store which grid this user contributed to (if not already set)
       await setUserContributedGridNumberInStorage(gridNum);
 
-      // Also update the main video with the merged version (for backward compatibility)
-      if (take1 && take2 && take3) {
-        // Use the last take as the main video for now
-        await updateVideoAtIndex(index, take3);
+      // Also update the main video with take1 (for backward compatibility)
+      if (take1) {
+        await updateVideoAtIndex(index, take1);
       }
 
       console.log('Video takes updated successfully');

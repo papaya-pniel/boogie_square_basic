@@ -45,8 +45,6 @@ export default function MainGrid() {
 
   // Synchronized playback state - always playing
   const [isPlaying, setIsPlaying] = useState(true);
-  const [currentTake, setCurrentTake] = useState(1); // 1, 2, or 3
-  const [playbackInterval, setPlaybackInterval] = useState(null);
   const [videosStarted, setVideosStarted] = useState(false); // Track if videos have been started for the first time
   const [startTimeout, setStartTimeout] = useState(null); // Track timeout for fallback start
 
@@ -78,8 +76,9 @@ export default function MainGrid() {
   }, [allTakeUrls]);
 
   const preloadTake = useCallback(
-    async (takeNum) => {
-      const takeKey = `take${takeNum}`;
+    async () => {
+      // Always preload take1
+      const takeKey = 'take1';
       await Promise.all(
         videoTakes.map(async (takes, index) => {
           if (!takes || !takes[takeKey]) return;
@@ -97,7 +96,7 @@ export default function MainGrid() {
               return next;
             });
           } catch (error) {
-            console.error(`Error preloading take ${takeNum} for slot ${index}:`, error);
+            console.error(`Error preloading take1 for slot ${index}:`, error);
           }
         })
       );
@@ -110,33 +109,13 @@ export default function MainGrid() {
     const initial = createInitialTakeUrls();
     setAllTakeUrls(initial);
     allTakeUrlsRef.current = initial;
-    preloadTake(1);
+    preloadTake();
   }, [videoTakes, preloadTake]);
 
-  // Prefetch current and upcoming takes just-in-time
-  // On mobile, preload next take immediately for smooth switching
+  // Preload take1 on mount
   useEffect(() => {
-    let cancelled = false;
-    const loadCurrent = async () => {
-      await preloadTake(currentTake);
-    };
-    loadCurrent();
-
-    const nextTake = currentTake === 3 ? 1 : currentTake + 1;
-    // On mobile, preload next take immediately (for 2-video swap strategy)
-    // On desktop, preload 1.5s before switch
-    const preloadDelay = isMobile ? 500 : 1500;
-    const timer = setTimeout(() => {
-      if (!cancelled) {
-        preloadTake(nextTake);
-      }
-    }, preloadDelay);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [currentTake, preloadTake, isMobile]);
+    preloadTake();
+  }, [preloadTake]);
 
   // Load and start ALL takes for all slots at once (so they're always playing and ready)
   // This ensures seamless switching - no reloading needed
@@ -144,7 +123,7 @@ export default function MainGrid() {
   useEffect(() => {
     // Always run - tutorials should start even if no user takes exist yet
     const hasLoadedTakes = allTakeUrls.some(
-      (slot) => slot && (slot.take1 || slot.take2 || slot.take3)
+      (slot) => slot && slot.take1
     );
     // Don't return early - tutorials need to start even without user takes
     
@@ -180,19 +159,17 @@ export default function MainGrid() {
               });
             })
           ).then(() => {
-            // Sync all videos of the same take together
-            for (let take = 1; take <= 3; take++) {
-              const takeVideos = Array.from(readyVideos).filter(v => 
-                v.getAttribute('data-take') === String(take)
-              );
-              if (takeVideos.length > 0) {
-                const referenceTime = takeVideos[0].currentTime;
-                takeVideos.forEach((video, index) => {
-                  if (index > 0) {
-                    video.currentTime = referenceTime;
-                  }
-                });
-              }
+            // Sync all take1 videos together
+            const take1Videos = Array.from(readyVideos).filter(v => 
+              v.getAttribute('data-take') === '1'
+            );
+            if (take1Videos.length > 0) {
+              const referenceTime = take1Videos[0].currentTime;
+              take1Videos.forEach((video, index) => {
+                if (index > 0) {
+                  video.currentTime = referenceTime;
+                }
+              });
             }
             videosStartedRef.current.allStarted = true;
             setVideosStarted(true);
@@ -201,17 +178,17 @@ export default function MainGrid() {
       }
     };
     
-    // Sync all videos of a specific take
-    const syncTake = (takeNum) => {
-      const takeVideos = Array.from(document.querySelectorAll(`video[data-take="${takeNum}"]`))
+    // Sync all take1 videos together
+    const syncTake1 = () => {
+      const take1Videos = Array.from(document.querySelectorAll('video[data-take="1"]'))
         .filter(v => v.src && v.src.trim() !== '');
       
-      if (takeVideos.length === 0) return;
+      if (take1Videos.length === 0) return;
       
-      const referenceVideo = takeVideos[0];
+      const referenceVideo = take1Videos[0];
       const referenceTime = referenceVideo.currentTime;
       
-      takeVideos.forEach((video, index) => {
+      take1Videos.forEach((video, index) => {
         if (index > 0) {
           if (Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
             video.currentTime = referenceTime;
@@ -223,7 +200,7 @@ export default function MainGrid() {
       });
     };
     
-    // Sync tutorial videos to current take
+    // Sync tutorial videos to take1
     const syncTutorials = () => {
       if (isMobile) return; // Tutorials disabled on mobile
       
@@ -232,12 +209,12 @@ export default function MainGrid() {
       
       if (tutorialVideos.length === 0) return;
       
-      // Sync tutorials to current take videos
-      const currentTakeVideos = Array.from(document.querySelectorAll(`video[data-take="${currentTake}"]`))
+      // Sync tutorials to take1 videos
+      const take1Videos = Array.from(document.querySelectorAll('video[data-take="1"]'))
         .filter(v => v.src && v.src.trim() !== '');
       
-      if (currentTakeVideos.length > 0) {
-        const referenceTime = currentTakeVideos[0].currentTime;
+      if (take1Videos.length > 0) {
+        const referenceTime = take1Videos[0].currentTime;
         tutorialVideos.forEach(video => {
           if (Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
             video.currentTime = referenceTime;
@@ -249,19 +226,10 @@ export default function MainGrid() {
       }
     };
     
-    // Sync all takes (so they stay in sync even when hidden)
-    // On mobile, sync current + next take (for 2-video swap strategy)
-    const syncAllTakes = () => {
-      if (isMobile) {
-        syncTake(currentTake);
-        const nextTake = currentTake === 3 ? 1 : currentTake + 1;
-        syncTake(nextTake);
-      } else {
-        for (let take = 1; take <= 3; take++) {
-          syncTake(take);
-        }
-        syncTutorials(); // Sync tutorials to current take
-      }
+    // Sync all videos
+    const syncAllVideos = () => {
+      syncTake1();
+      syncTutorials();
     };
     
     let allVideoElements = getAllVideoElements();
@@ -279,8 +247,8 @@ export default function MainGrid() {
     
     // Check if we've already started all videos
     if (videosStartedRef.current.allStarted) {
-      // Sync all takes to keep them in sync
-      syncAllTakes();
+      // Sync all videos to keep them in sync
+      syncAllVideos();
       return;
     }
     
@@ -292,8 +260,8 @@ export default function MainGrid() {
       if (!videosStartedRef.current.allStarted) {
         startAllVideos();
       } else {
-        // Sync all takes periodically so they stay in sync even when hidden
-        syncAllTakes();
+        // Sync all videos periodically so they stay in sync even when hidden
+        syncAllVideos();
       }
     }, SYNC_INTERVAL_MS);
     
@@ -310,9 +278,9 @@ export default function MainGrid() {
               video.play().catch(() => {});
             }
           });
-          // Sync all takes after starting
+          // Sync all videos after starting
           setTimeout(() => {
-            syncAllTakes();
+            syncAllVideos();
           }, SYNC_INTERVAL_MS);
           videosStartedRef.current.allStarted = true;
           setVideosStarted(true);
@@ -320,10 +288,10 @@ export default function MainGrid() {
       }
     }, 2000);
     
-    // Sync all takes periodically to prevent drift
+    // Sync all videos periodically to prevent drift
     const syncInterval = setInterval(() => {
       if (videosStartedRef.current.allStarted) {
-        syncAllTakes();
+        syncAllVideos();
       }
     }, SYNC_INTERVAL_MS);
     
@@ -332,71 +300,8 @@ export default function MainGrid() {
       clearInterval(syncInterval);
       clearTimeout(fallbackTimeout);
     };
-  }, [allTakeUrls, currentTake]);
+  }, [allTakeUrls]);
 
-  // On mobile: handle smooth take switching with opacity swap
-  useEffect(() => {
-    if (!isMobile) return;
-    
-    const handleTakeSwitch = () => {
-      // Get all video elements
-      const allVideos = Array.from(document.querySelectorAll('video[data-take]'))
-        .filter(v => v.src && v.src.trim() !== '');
-      
-      if (allVideos.length === 0) return;
-      
-      // Separate current and next take videos
-      const currentTakeVideos = allVideos.filter(v => 
-        v.getAttribute('data-take') === String(currentTake)
-      );
-      const nextTake = currentTake === 3 ? 1 : currentTake + 1;
-      const nextTakeVideos = allVideos.filter(v => 
-        v.getAttribute('data-take') === String(nextTake)
-      );
-      
-      // Start all videos playing (both current and next)
-      // This ensures the next take is already playing when we switch
-      allVideos.forEach(video => {
-        if (video.readyState >= 2) {
-          if (video.paused) {
-            // Sync next take videos to current take's time for smooth transition
-            const isNextTake = video.getAttribute('data-take') === String(nextTake);
-            if (isNextTake && currentTakeVideos.length > 0 && currentTakeVideos[0].currentTime > 0) {
-              video.currentTime = currentTakeVideos[0].currentTime;
-            } else {
-              video.currentTime = 0;
-            }
-            video.play().catch(() => {});
-          }
-        }
-      });
-      
-      // Swap opacity: show current, hide next
-      currentTakeVideos.forEach(video => {
-        video.style.opacity = '1';
-        video.style.pointerEvents = 'auto';
-      });
-      nextTakeVideos.forEach(video => {
-        video.style.opacity = '0';
-        video.style.pointerEvents = 'none';
-      });
-      
-      // Sync current take videos
-      if (currentTakeVideos.length > 0) {
-        const referenceTime = currentTakeVideos[0].currentTime;
-        currentTakeVideos.forEach((video, index) => {
-          if (index > 0 && Math.abs(video.currentTime - referenceTime) > DRIFT_TOLERANCE) {
-            video.currentTime = referenceTime;
-          }
-        });
-      }
-    };
-    
-    // Wait a bit for DOM to update
-    const timer = setTimeout(handleTakeSwitch, 50);
-    
-    return () => clearTimeout(timer);
-  }, [currentTake, isMobile, allTakeUrls]);
 
 
   // Create padded array for mapping (16 slots total)
@@ -405,28 +310,7 @@ export default function MainGrid() {
   // Initialize synchronized playback on mount
   useEffect(() => {
     console.log('🎬 Starting synchronized playback');
-    setCurrentTake(1);
     setVideosStarted(false); // Reset when starting
-    
-    // Cycle through takes every 4 seconds
-    // With preloaded videos, switching should be near-instant (no rebuffering)
-    const interval = setInterval(() => {
-      setCurrentTake(prevTake => {
-        const nextTake = prevTake === 3 ? 1 : prevTake + 1;
-        console.log(`🎬 Switching to take ${nextTake}`);
-        setVideosStarted(false); // Reset for each new take
-        return nextTake;
-      });
-    }, 4000); // 4 seconds per take
-    
-    setPlaybackInterval(interval);
-    
-    // Cleanup on unmount
-    return () => {
-      if (interval) {
-        clearInterval(interval);
-      }
-    };
   }, []);
 
 
@@ -439,10 +323,10 @@ export default function MainGrid() {
   }, [selectedSong]);
 
   useEffect(() => {
-    // Check if all takes are loaded (for grid readiness)
+    // Check if all videos are loaded (for grid readiness)
     const totalVideos = allTakeUrls.reduce((count, slotTakes) => {
       if (!slotTakes) return count;
-      return count + (slotTakes.take1 ? 1 : 0) + (slotTakes.take2 ? 1 : 0) + (slotTakes.take3 ? 1 : 0);
+      return count + (slotTakes.take1 ? 1 : 0);
     }, 0);
 
     if (totalVideos === 0) {
@@ -492,8 +376,8 @@ export default function MainGrid() {
     }
     
     const hasUserContribution = userContributions.has(index);
-    // Check if there are any takes recorded for this slot (not just current take)
-    const hasAnyRecording = videoTakes[index] && (videoTakes[index].take1 || videoTakes[index].take2 || videoTakes[index].take3);
+    // Check if there are any takes recorded for this slot
+    const hasAnyRecording = videoTakes[index] && videoTakes[index].take1;
     
     // Don't allow clicking on slots with recordings from other users
     if (hasAnyRecording && !hasUserContribution) return;
@@ -505,8 +389,8 @@ export default function MainGrid() {
 
   const getSlotStyle = (index) => {
     const hasUserContribution = userContributions.has(index);
-    // Check if there are any takes recorded for this slot (not just current take)
-    const hasAnyRecording = videoTakes[index] && (videoTakes[index].take1 || videoTakes[index].take2 || videoTakes[index].take3);
+    // Check if there are any takes recorded for this slot
+    const hasAnyRecording = videoTakes[index] && videoTakes[index].take1;
     
     if (hasUserContribution) {
       return "bg-green-500/20 border-green-400 cursor-pointer hover:bg-green-500/30"; // User's contribution - green background
@@ -517,12 +401,11 @@ export default function MainGrid() {
     }
   };
 
-  // Optional helper reused from RecordPage for preview (step 0)
-  const getTutorialSrc = (step, index) => {
-    const folders = ["/tutorial_1/", "/tutorial_2/", "/tutorial_3/"];
-    const folder = folders[Math.max(0, Math.min(step, folders.length - 1))];
+  // Helper to get tutorial video (always tutorial_1)
+  const getTutorialSrc = (index) => {
+    const folder = "/tutorial_1/";
     const n = index + 1;
-    return folder + encodeURIComponent(`Pattern-${step + 1}_${n}.mp4`);
+    return folder + encodeURIComponent(`Pattern-1_${n}.mp4`);
   };
 
   if (isLoading) {
@@ -587,8 +470,8 @@ export default function MainGrid() {
       >
         {paddedSlots.map((_, idx) => {
           const hasUserContribution = userContributions.has(idx);
-          // Check if there are any takes recorded for this slot (not just current take)
-          const hasAnyRecording = videoTakes[idx] && (videoTakes[idx].take1 || videoTakes[idx].take2 || videoTakes[idx].take3);
+          // Check if there are any takes recorded for this slot
+          const hasAnyRecording = videoTakes[idx] && videoTakes[idx].take1;
           
           return (
             <div
@@ -598,106 +481,20 @@ export default function MainGrid() {
             >
               {hasAnyRecording ? (
                 <>
-                  {/* On mobile: two video elements (current + next) for smooth switching. On desktop: all 3 takes preloaded */}
-                  {isMobile ? (
-                    // Mobile: current + next take for smooth transitions
-                    allTakeUrls[idx] && (
-                      <>
-                        {allTakeUrls[idx][`take${currentTake}`] && (
-                          <video
-                            key={`${idx}-mobile-current-${currentTake}`}
-                            data-take={String(currentTake)}
-                            data-slot={idx}
-                            src={allTakeUrls[idx][`take${currentTake}`]}
-                            autoPlay={false}
-                            muted
-                            loop
-                            playsInline
-                            preload="auto"
-                            className="absolute inset-0 w-full h-full object-cover z-0"
-                            style={{ opacity: 1 }}
-                          />
-                        )}
-                        {(() => {
-                          const nextTake = currentTake === 3 ? 1 : currentTake + 1;
-                          return allTakeUrls[idx][`take${nextTake}`] && (
-                            <video
-                              key={`${idx}-mobile-next-${nextTake}`}
-                              data-take={String(nextTake)}
-                              data-slot={idx}
-                              src={allTakeUrls[idx][`take${nextTake}`]}
-                              autoPlay={false}
-                              muted
-                              loop
-                              playsInline
-                              preload="auto"
-                              className="absolute inset-0 w-full h-full object-cover z-0"
-                              style={{ opacity: 0, pointerEvents: 'none' }}
-                            />
-                          );
-                        })()}
-                      </>
-                    )
-                  ) : (
-                    // Desktop: all 3 takes preloaded for instant switching
-                    allTakeUrls[idx] && (
-                      <>
-                        {allTakeUrls[idx].take1 && (
-                          <video
-                            key={`${idx}-take1`}
-                            data-take="1"
-                            data-slot={idx}
-                            src={allTakeUrls[idx].take1}
-                            autoPlay={false}
-                            muted
-                            loop
-                            playsInline
-                            preload="auto"
-                            className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
-                            style={{ 
-                              opacity: currentTake === 1 && videosStartedRef.current.allStarted ? 1 : 0,
-                              pointerEvents: currentTake === 1 ? 'auto' : 'none'
-                            }}
-                          />
-                        )}
-                        {allTakeUrls[idx].take2 && (
-                          <video
-                            key={`${idx}-take2`}
-                            data-take="2"
-                            data-slot={idx}
-                            src={allTakeUrls[idx].take2}
-                            autoPlay={false}
-                            muted
-                            loop
-                            playsInline
-                            preload="auto"
-                            className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
-                            style={{ 
-                              opacity: currentTake === 2 && videosStartedRef.current.allStarted ? 1 : 0,
-                              pointerEvents: currentTake === 2 ? 'auto' : 'none'
-                            }}
-                          />
-                        )}
-                        {allTakeUrls[idx].take3 && (
-                          <video
-                            key={`${idx}-take3`}
-                            data-take="3"
-                            data-slot={idx}
-                            src={allTakeUrls[idx].take3}
-                            autoPlay={false}
-                            muted
-                            loop
-                            playsInline
-                            preload="auto"
-                            className="absolute inset-0 w-full h-full object-cover z-0 transition-opacity duration-100"
-                            style={{ 
-                              opacity: currentTake === 3 && videosStartedRef.current.allStarted ? 1 : 0,
-                              pointerEvents: currentTake === 3 ? 'auto' : 'none'
-                            }}
-                          />
-                        )}
-                      </>
-                    )
+                  {/* Always show take1, looped */}
+                  {allTakeUrls[idx] && allTakeUrls[idx].take1 && (
+                    <video
+                      key={`${idx}-take1`}
+                      data-take="1"
+                      data-slot={idx}
+                      src={allTakeUrls[idx].take1}
+                      autoPlay={false}
+                      muted
+                      loop
+                      playsInline
+                      preload="auto"
+                      className="absolute inset-0 w-full h-full object-cover z-0"
+                    />
                   )}
                   {/* User's own recording indicator */}
                   {hasUserContribution && (
@@ -711,10 +508,10 @@ export default function MainGrid() {
                   {/* Tutorial video - disabled on mobile to save memory */}
                   {!isMobile && (
                     <video
-                      key={`tutorial-${idx}-${currentTake}`}
+                      key={`tutorial-${idx}`}
                       data-tutorial
                       data-slot={idx}
-                      src={getTutorialSrc(currentTake - 1, idx)}
+                      src={getTutorialSrc(idx)}
                       autoPlay
                       muted
                       loop

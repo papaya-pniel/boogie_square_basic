@@ -5,12 +5,11 @@ import { Button } from "../components/ui/button";
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 
-// Helper: map recording step (0..2) and grid index (0..15) to tutorial video path
-function getTutorialSrc(step, index) {
-  const folders = ["/tutorial_1/", "/tutorial_2/", "/tutorial_3/"];
-  const folder = folders[Math.max(0, Math.min(step, folders.length - 1))];
+// Helper: map grid index (0..15) to tutorial video path (always tutorial_1)
+function getTutorialSrc(index) {
+  const folder = "/tutorial_1/";
   const n = (Number(index) || 0) + 1; // 1..16
-  const filename = `Pattern-${step + 1}_${n}.mp4`;
+  const filename = `Pattern-1_${n}.mp4`;
   return folder + encodeURIComponent(filename);
 }
 
@@ -43,8 +42,7 @@ export default function RecordPage() {
   const [countdown, setCountdown] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const [step, setStep] = useState(0); // 0..2
-  const [clips, setClips] = useState([]); // Blob[] of each take
+  const [clip, setClip] = useState(null); // Single recording blob
   const [previewUrl, setPreviewUrl] = useState(null);
   const [showTutorialPreview, setShowTutorialPreview] = useState(true); // New state for tutorial preview mode
   const [showReadyToRecord, setShowReadyToRecord] = useState(false); // New state for ready to record screen
@@ -56,7 +54,7 @@ export default function RecordPage() {
   const chunksRef = useRef([]);
   const stopTimerRef = useRef(null);
 
-  const tutorialVideoUrl = getTutorialSrc(step, idxNum);
+  const tutorialVideoUrl = getTutorialSrc(idxNum);
 
   useEffect(() => {
     const timeout = setTimeout(() => tutorialRef.current?.play().catch(() => {}), 100);
@@ -99,7 +97,7 @@ export default function RecordPage() {
       const blob = new Blob(chunksRef.current, { type: 'video/webm' });
       const url = URL.createObjectURL(blob);
       setPreviewUrl(url);
-      setClips((prev) => [...prev, blob]);
+      setClip(blob);
       stream.getTracks().forEach((t) => t.stop());
       stopTimerRef.current && clearTimeout(stopTimerRef.current);
       stopTimerRef.current = null;
@@ -149,45 +147,37 @@ export default function RecordPage() {
     }, 1000);
   };
 
-  const handleNextOrSave = async () => {
+  const handleSave = async () => {
     try {
       setUploadError(null);
-      if (step < 2) {
-        setStep(step + 1);
-        setPreviewUrl(null);
-        setShowTutorialPreview(true); // Show tutorial preview for next take
-        setShowReadyToRecord(false);
-        return;
-      }
-      if (clips.length !== 3) {
-        setUploadError('Missing takes. Please record all 3.');
+      if (!clip) {
+        setUploadError('Please record a video first.');
         return;
       }
       setIsUploading(true);
       
-      // Save all 3 takes separately to the grid
+      // Save the single recording as take1 (and also as take2/take3 for compatibility)
       // This allows synchronized playback across the grid
-      await saveAllTakesToGrid(clips);
+      await saveRecordingToGrid(clip);
       
-      // Also save merged video in the background (for backward compatibility)
+      // Also save to main video slot (for backward compatibility)
       try {
-        const mergedBlob = await mergeVideoClips(clips);
-        await updateVideoAtIndex(slotToUpdate, mergedBlob);
-        console.log('✅ Merged video saved');
-      } catch (mergeError) {
-        console.warn('Failed to save merged video (non-critical):', mergeError);
+        await updateVideoAtIndex(slotToUpdate, clip);
+        console.log('✅ Video saved');
+      } catch (saveError) {
+        console.warn('Failed to save main video (non-critical):', saveError);
       }
       
       // After saving, get the grid number the user contributed to and reload to show their grid
       const userGridNum = await getUserContributedGridNumber();
-      console.log('✅ All takes saved. User contributed to grid:', userGridNum);
+      console.log('✅ Recording saved. User contributed to grid:', userGridNum);
       
       // Directly return to grid - no preview step
       // Add parameter to show completion popup
       window.location.href = '/?justRecorded=true';
     } catch (e) {
       console.error(e);
-      setUploadError('Failed to save videos. Please try again.');
+      setUploadError('Failed to save video. Please try again.');
       setIsUploading(false);
     }
   };
@@ -294,29 +284,25 @@ export default function RecordPage() {
     });
   };
 
-  // Function to save all takes separately for synchronized grid playback
-  const saveAllTakesToGrid = async (clips) => {
+  // Function to save the single recording for synchronized grid playback
+  const saveRecordingToGrid = async (recordingBlob) => {
     try {
-      console.log('Saving all takes separately:', clips.length);
+      console.log('Saving recording to grid');
       console.log('Current grid number:', currentGridNumber);
       
-      // Save all 3 takes to the same slot using the new function
-      const take1 = clips[0] || null;
-      const take2 = clips[1] || null;
-      const take3 = clips[2] || null;
+      // Save the single recording as take1 only
+      await updateVideoTakesAtIndex(slotToUpdate, recordingBlob, null, null);
       
-      await updateVideoTakesAtIndex(slotToUpdate, take1, take2, take3);
-      
-      console.log('All takes saved successfully');
+      console.log('Recording saved successfully');
       
     } catch (error) {
-      console.error('Error saving takes:', error);
+      console.error('Error saving recording:', error);
       throw error;
     }
   };
 
   const handleReRecord = () => {
-    if (clips.length > 0) setClips((prev) => prev.slice(0, -1));
+    setClip(null);
     setPreviewUrl(null);
     setRecording(false);
     setShowTutorialPreview(true); // Show tutorial preview again
@@ -332,7 +318,7 @@ export default function RecordPage() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative">
-      <h2 className="text-2xl font-semibold mb-6">Record (Slot #{slotToUpdate}) — Take {step + 1} of 3</h2>
+      <h2 className="text-2xl font-semibold mb-6">Record (Slot #{slotToUpdate})</h2>
 
       {!previewUrl ? (
         <>
@@ -357,7 +343,6 @@ export default function RecordPage() {
               </div>
               <div className="text-center mt-4 text-gray-300">
                 <p>Watch the tutorial above, then click "Ready to Record" when ready!</p>
-                <p className="text-sm text-gray-400 mt-2">Take {step + 1} of 3</p>
               </div>
             </>
           ) : showReadyToRecord ? (
@@ -411,7 +396,6 @@ export default function RecordPage() {
               </div>
               <div className="text-center mt-4 text-gray-300">
                 <p>Camera is ready! Position yourself and click "Start Recording" when ready.</p>
-                <p className="text-sm text-gray-400 mt-2">Take {step + 1} of 3</p>
               </div>
             </>
           ) : (
@@ -451,10 +435,10 @@ export default function RecordPage() {
           {uploadError && <p className="text-red-400 mb-4">{uploadError}</p>}
           <video src={previewUrl} controls className="w-full max-w-xl rounded-none" />
           <div className="flex gap-4 mt-4">
-            <Button onClick={handleNextOrSave} disabled={isUploading}>
-              {step < 2 ? 'Use Take & Next Tutorial' : 'Save & Return to Grid'}
+            <Button onClick={handleSave} disabled={isUploading}>
+              Save & Return to Grid
             </Button>
-            <Button variant="secondary" onClick={handleReRecord} disabled={isUploading}>Re-record this Take</Button>
+            <Button variant="secondary" onClick={handleReRecord} disabled={isUploading}>Re-record</Button>
           </div>
         </>
       )}
