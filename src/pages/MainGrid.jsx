@@ -759,16 +759,39 @@ export default function MainGrid() {
         )}
       </div>
 
-      {/* Grid Number - below grid */}
+      {/* Grid Number with Navigation Arrows - below grid */}
       <div className={`${isMobile ? 'mt-4' : 'mt-6'} flex flex-col items-center gap-2`}>
-        <div className={`${isMobile ? 'text-base' : 'text-lg'} text-gray-400 font-semibold text-center`}>
-          Grid #{currentGridNumber || 1}
-          {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
-            <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-green-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Your Grid)</span>
-          )}
-          {currentGridNumber === activeGridNumber && (
-            <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
-          )}
+        <div className="flex items-center justify-center gap-4">
+          {/* Left Arrow */}
+          <button
+            onClick={() => handleGridChange(Math.max(1, currentGridNumber - 1))}
+            disabled={currentGridNumber <= 1 || isTransitioning}
+            className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-2xl' : 'min-w-[40px] min-h-[40px] text-xl'} bg-gray-800/50 hover:bg-gray-700/50 text-white rounded-full border border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-all flex items-center justify-center shadow-lg`}
+            aria-label="Previous grid"
+          >
+            ←
+          </button>
+          
+          {/* Grid Number */}
+          <div className={`${isMobile ? 'text-base' : 'text-lg'} text-gray-400 font-semibold text-center`}>
+            Grid #{currentGridNumber || 1}
+            {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
+              <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-green-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Your Grid)</span>
+            )}
+            {currentGridNumber === activeGridNumber && (
+              <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
+            )}
+          </div>
+          
+          {/* Right Arrow */}
+          <button
+            onClick={() => handleGridChange(currentGridNumber + 1)}
+            disabled={currentGridNumber >= activeGridNumber || isTransitioning}
+            className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-2xl' : 'min-w-[40px] min-h-[40px] text-xl'} bg-gray-800/50 hover:bg-gray-700/50 text-white rounded-full border border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-all flex items-center justify-center shadow-lg`}
+            aria-label="Next grid"
+          >
+            →
+          </button>
         </div>
         
         {/* Mobile share button */}
@@ -780,26 +803,6 @@ export default function MainGrid() {
             📤 Share Grid
           </button>
         )}
-      </div>
-
-      {/* Grid Navigation Arrows - below grid */}
-      <div className={`flex items-center ${isMobile ? 'justify-center gap-6 mt-4' : 'justify-center gap-4 mt-6'}`}>
-        <button
-          onClick={() => handleGridChange(Math.max(1, currentGridNumber - 1))}
-          disabled={currentGridNumber <= 1 || isTransitioning}
-          className={`${isMobile ? 'min-w-[50px] min-h-[50px] text-3xl' : 'min-w-[48px] min-h-[48px] text-2xl'} bg-gray-800/50 hover:bg-gray-700/50 text-white rounded-full border border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-all flex items-center justify-center shadow-lg`}
-          aria-label="Previous grid"
-        >
-          ←
-        </button>
-        <button
-          onClick={() => handleGridChange(currentGridNumber + 1)}
-          disabled={currentGridNumber >= activeGridNumber || isTransitioning}
-          className={`${isMobile ? 'min-w-[50px] min-h-[50px] text-3xl' : 'min-w-[48px] min-h-[48px] text-2xl'} bg-gray-800/50 hover:bg-gray-700/50 text-white rounded-full border border-gray-600 disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-all flex items-center justify-center shadow-lg`}
-          aria-label="Next grid"
-        >
-          →
-        </button>
       </div>
           </div>
 
