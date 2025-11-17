@@ -575,7 +575,13 @@ export default function MainGrid() {
         <div className="min-h-screen bg-black text-white flex flex-col safe-area-inset">
           {/* Top Banner */}
           <div className={`w-full ${isMobile ? 'px-4 py-3' : 'px-6 py-4'} flex justify-between items-center border-b border-gray-800`}>
-            <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold`}>Boogie Square</h1>
+            <div className="flex items-center">
+              <img 
+                src="/logo.png" 
+                alt="Boogie Square" 
+                className={`${isMobile ? 'h-8' : 'h-10'} w-auto object-contain`}
+              />
+            </div>
             <div className="flex items-center gap-2">
               {!isMobile && (
                 <>
@@ -643,6 +649,21 @@ export default function MainGrid() {
               transition: 'transform 0.3s ease, opacity 0.3s ease'
             }}
           >
+      {/* Completion Status Bar - above grid */}
+      <div className={`${isMobile ? 'mb-4' : 'mb-6'} flex flex-col items-center gap-2 w-full`}>
+        <div className="flex items-center gap-3 w-full max-w-md">
+          <div className={`flex-1 ${isMobile ? 'h-2' : 'h-2.5'} bg-gray-800 rounded-full overflow-hidden`}>
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
+              style={{ width: `${completionPercentage}%` }}
+            />
+          </div>
+          <span className={`${isMobile ? 'text-sm' : 'text-base'} text-gray-400 font-semibold min-w-[3rem] text-right`}>
+            {completionPercentage}%
+          </span>
+        </div>
+      </div>
+
       {/* Grid - responsive sizing */}
       <div 
         className={`grid gap-0 border border-gray-300 ${isTransitioning ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}
@@ -717,7 +738,7 @@ export default function MainGrid() {
         })}
       </div>
 
-      {/* Grid Number and Completion - below grid */}
+      {/* Grid Number - below grid */}
       <div className={`${isMobile ? 'mt-4' : 'mt-6'} flex flex-col items-center gap-2`}>
         <div className={`${isMobile ? 'text-base' : 'text-lg'} text-gray-400 font-semibold text-center`}>
           Grid #{currentGridNumber || 1}
@@ -727,19 +748,6 @@ export default function MainGrid() {
           {currentGridNumber === activeGridNumber && (
             <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
           )}
-        </div>
-        
-        {/* Completion Indicator */}
-        <div className="flex items-center gap-2">
-          <div className={`${isMobile ? 'w-32' : 'w-48'} h-2 bg-gray-800 rounded-full overflow-hidden`}>
-            <div 
-              className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
-              style={{ width: `${completionPercentage}%` }}
-            />
-          </div>
-          <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-400 font-medium`}>
-            {filledSlots}/{totalSlots} ({completionPercentage}%)
-          </span>
         </div>
         
         {/* Mobile share button */}
