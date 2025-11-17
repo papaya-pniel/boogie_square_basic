@@ -67,6 +67,21 @@ export default function MainGrid() {
   // Minimum swipe distance (in pixels)
   const minSwipeDistance = 50;
   
+  // Pull-to-refresh state
+  const pullStartRef = useRef(null);
+  const pullDistanceRef = useRef(0);
+  const [isPulling, setIsPulling] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  
+  // Grid search/filter state
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // Calculate grid completion
+  const filledSlots = videoTakes.filter(takes => takes && (takes.take1 || takes.take2 || takes.take3)).length;
+  const completionPercentage = Math.round((filledSlots / totalSlots) * 100);
+  
   // Check if user just completed recording
   useEffect(() => {
     const justRecorded = searchParams.get('justRecorded');
@@ -364,34 +379,127 @@ export default function MainGrid() {
   // Handle swipe gestures for grid navigation
   const onTouchStart = (e) => {
     if (!isMobile) return;
+    const touch = e.targetTouches[0];
     touchEndRef.current = null;
-    touchStartRef.current = e.targetTouches[0].clientX;
+    touchStartRef.current = touch.clientX;
+    
+    // Also track for pull-to-refresh (vertical)
+    pullStartRef.current = touch.clientY;
+    pullDistanceRef.current = 0;
   };
 
   const onTouchMove = (e) => {
     if (!isMobile) return;
-    touchEndRef.current = e.targetTouches[0].clientX;
+    const touch = e.targetTouches[0];
+    touchEndRef.current = touch.clientX;
+    
+    // Handle pull-to-refresh (vertical pull down)
+    if (pullStartRef.current !== null && window.scrollY === 0) {
+      const pullDistance = touch.clientY - pullStartRef.current;
+      if (pullDistance > 0) {
+        pullDistanceRef.current = Math.min(pullDistance, 100);
+        setPullDistance(pullDistanceRef.current);
+        setIsPulling(pullDistance > 10);
+      }
+    }
   };
 
-  const onTouchEnd = () => {
-    if (!isMobile || !touchStartRef.current || !touchEndRef.current) return;
+  const onTouchEnd = async () => {
+    if (!isMobile) return;
     
-    const distance = touchStartRef.current - touchEndRef.current;
-    const isLeftSwipe = distance > minSwipeDistance;
-    const isRightSwipe = distance < -minSwipeDistance;
+    // Handle horizontal swipe for grid navigation
+    if (touchStartRef.current !== null && touchEndRef.current !== null) {
+      const distance = touchStartRef.current - touchEndRef.current;
+      const isLeftSwipe = distance > minSwipeDistance;
+      const isRightSwipe = distance < -minSwipeDistance;
 
-    if (isLeftSwipe && currentGridNumber < activeGridNumber) {
-      // Swipe left - go to next grid
-      loadGridByNumber(currentGridNumber + 1);
-    } else if (isRightSwipe && currentGridNumber > 1) {
-      // Swipe right - go to previous grid
-      loadGridByNumber(Math.max(1, currentGridNumber - 1));
+      if (isLeftSwipe && currentGridNumber < activeGridNumber) {
+        // Swipe left - go to next grid
+        await handleGridChange(currentGridNumber + 1);
+      } else if (isRightSwipe && currentGridNumber > 1) {
+        // Swipe right - go to previous grid
+        await handleGridChange(Math.max(1, currentGridNumber - 1));
+      }
     }
     
-    // Reset touch positions
+    // Handle pull-to-refresh
+    if (pullDistanceRef.current > 50) {
+      await handleRefresh();
+    }
+    
+    // Reset all touch positions
     touchStartRef.current = null;
     touchEndRef.current = null;
+    pullStartRef.current = null;
+    pullDistanceRef.current = 0;
+    setPullDistance(0);
+    setIsPulling(false);
   };
+  
+  // Handle grid change with smooth transition
+  const handleGridChange = async (gridNum) => {
+    setIsTransitioning(true);
+    await loadGridByNumber(gridNum);
+    setTimeout(() => setIsTransitioning(false), 300);
+  };
+  
+  // Handle pull-to-refresh
+  const handleRefresh = async () => {
+    setIsPulling(true);
+    await loadGridByNumber(currentGridNumber);
+    setTimeout(() => {
+      setIsPulling(false);
+      setPullDistance(0);
+    }, 500);
+  };
+  
+  // Share grid link
+  const handleShareGrid = () => {
+    const url = `${window.location.origin}${window.location.pathname}?grid=${currentGridNumber}`;
+    if (navigator.share && isMobile) {
+      navigator.share({
+        title: `Boogie Square - Grid ${currentGridNumber}`,
+        text: `Check out Grid ${currentGridNumber} on Boogie Square!`,
+        url: url
+      }).catch(err => console.log('Error sharing:', err));
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        alert('Grid link copied to clipboard!');
+      }).catch(err => {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = url;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        alert('Grid link copied to clipboard!');
+      });
+    }
+  };
+  
+  // Handle grid search
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    if (query && !isNaN(query)) {
+      const gridNum = parseInt(query);
+      if (gridNum >= 1 && gridNum <= activeGridNumber) {
+        handleGridChange(gridNum);
+      }
+    }
+  };
+  
+  // Check URL for grid parameter on mount
+  useEffect(() => {
+    const gridParam = searchParams.get('grid');
+    if (gridParam && !isNaN(gridParam)) {
+      const gridNum = parseInt(gridParam);
+      if (gridNum >= 1 && gridNum <= activeGridNumber) {
+        loadGridByNumber(gridNum);
+      }
+    }
+  }, [searchParams, activeGridNumber, loadGridByNumber]);
 
   const handleSlotClick = async (index) => {
     // If viewing a grid that's not the active grid, don't allow contributions
@@ -468,10 +576,60 @@ export default function MainGrid() {
           {/* Top Banner */}
           <div className={`w-full ${isMobile ? 'px-4 py-3' : 'px-6 py-4'} flex justify-between items-center border-b border-gray-800`}>
             <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold`}>Boogie Square</h1>
-            <div className="flex items-center">
+            <div className="flex items-center gap-2">
+              {!isMobile && (
+                <>
+                  <button
+                    onClick={() => setShowSearch(!showSearch)}
+                    className="px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors"
+                    aria-label="Search grids"
+                  >
+                    🔍
+                  </button>
+                  <button
+                    onClick={handleShareGrid}
+                    className="px-3 py-1.5 text-sm text-gray-300 hover:text-white transition-colors"
+                    aria-label="Share grid"
+                  >
+                    📤
+                  </button>
+                </>
+              )}
               <AuthButton />
             </div>
           </div>
+          
+          {/* Search Bar */}
+          {showSearch && !isMobile && (
+            <div className="w-full px-6 py-3 bg-gray-900 border-b border-gray-800">
+              <input
+                type="number"
+                value={searchQuery}
+                onChange={handleSearchChange}
+                placeholder="Enter grid number..."
+                min="1"
+                max={activeGridNumber}
+                className="w-full max-w-xs px-4 py-2 bg-black border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+          )}
+          
+          {/* Pull-to-refresh indicator */}
+          {isMobile && isPulling && (
+            <div 
+              className="fixed top-0 left-0 right-0 flex items-center justify-center z-50 bg-black/80 backdrop-blur-sm"
+              style={{ 
+                height: `${Math.min(pullDistance, 60)}px`,
+                transform: `translateY(${pullDistance > 50 ? 0 : -60 + pullDistance}px)`
+              }}
+            >
+              {pullDistance > 50 ? (
+                <div className="text-white text-sm">Release to refresh</div>
+              ) : (
+                <div className="text-white text-sm">Pull to refresh</div>
+              )}
+            </div>
+          )}
 
           {/* Main Content Area */}
           <div 
@@ -479,10 +637,15 @@ export default function MainGrid() {
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
+            style={{
+              transform: isTransitioning ? 'translateX(20px)' : 'translateX(0)',
+              opacity: isTransitioning ? 0.7 : 1,
+              transition: 'transform 0.3s ease, opacity 0.3s ease'
+            }}
           >
       {/* Grid - responsive sizing */}
       <div 
-        className="grid gap-0 border border-gray-300"
+        className={`grid gap-0 border border-gray-300 ${isTransitioning ? 'opacity-50' : 'opacity-100'} transition-opacity duration-300`}
         style={{
           gridTemplateColumns: `repeat(4, 1fr)`,
           gridTemplateRows: `repeat(4, 1fr)`,
@@ -554,30 +717,55 @@ export default function MainGrid() {
         })}
       </div>
 
-      {/* Grid Number - below grid */}
-      <div className={`${isMobile ? 'text-base mt-4' : 'text-lg mt-6'} text-gray-400 font-semibold text-center`}>
-        Grid #{currentGridNumber || 1}
-        {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
-          <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-green-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Your Grid)</span>
-        )}
-        {currentGridNumber === activeGridNumber && (
-          <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
+      {/* Grid Number and Completion - below grid */}
+      <div className={`${isMobile ? 'mt-4' : 'mt-6'} flex flex-col items-center gap-2`}>
+        <div className={`${isMobile ? 'text-base' : 'text-lg'} text-gray-400 font-semibold text-center`}>
+          Grid #{currentGridNumber || 1}
+          {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
+            <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-green-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Your Grid)</span>
+          )}
+          {currentGridNumber === activeGridNumber && (
+            <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
+          )}
+        </div>
+        
+        {/* Completion Indicator */}
+        <div className="flex items-center gap-2">
+          <div className={`${isMobile ? 'w-32' : 'w-48'} h-2 bg-gray-800 rounded-full overflow-hidden`}>
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
+              style={{ width: `${completionPercentage}%` }}
+            />
+          </div>
+          <span className={`${isMobile ? 'text-xs' : 'text-sm'} text-gray-400 font-medium`}>
+            {filledSlots}/{totalSlots} ({completionPercentage}%)
+          </span>
+        </div>
+        
+        {/* Mobile share button */}
+        {isMobile && (
+          <button
+            onClick={handleShareGrid}
+            className="mt-2 px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors touch-manipulation"
+          >
+            📤 Share Grid
+          </button>
         )}
       </div>
 
       {/* Grid Navigation Arrows - below grid */}
       <div className={`flex items-center ${isMobile ? 'justify-center gap-6 mt-4' : 'justify-center gap-4 mt-6'}`}>
         <button
-          onClick={() => loadGridByNumber(Math.max(1, currentGridNumber - 1))}
-          disabled={currentGridNumber <= 1}
+          onClick={() => handleGridChange(Math.max(1, currentGridNumber - 1))}
+          disabled={currentGridNumber <= 1 || isTransitioning}
           className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-3xl' : 'min-w-[40px] min-h-[40px] text-2xl'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-colors`}
           aria-label="Previous grid"
         >
           ←
         </button>
         <button
-          onClick={() => loadGridByNumber(currentGridNumber + 1)}
-          disabled={currentGridNumber >= activeGridNumber}
+          onClick={() => handleGridChange(currentGridNumber + 1)}
+          disabled={currentGridNumber >= activeGridNumber || isTransitioning}
           className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-3xl' : 'min-w-[40px] min-h-[40px] text-2xl'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-colors`}
           aria-label="Next grid"
         >
