@@ -43,21 +43,29 @@ export default function AuthButton() {
     }
   };
 
+  // Detect mobile for responsive layout
+  const isMobile = typeof window !== 'undefined' && (
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || 
+    window.innerWidth < 768
+  );
+
   if (user) {
     return (
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          {user.signInDetails?.loginId && (
-            <span className="text-sm text-gray-300">
-              {user.signInDetails.loginId}
-            </span>
-          )}
-        </div>
+      <div className={`flex ${isMobile ? 'flex-col gap-2' : 'items-center gap-4'}`}>
+        {!isMobile && (
+          <div className="flex items-center gap-2">
+            {user.signInDetails?.loginId && (
+              <span className="text-sm text-gray-300">
+                {user.signInDetails.loginId}
+              </span>
+            )}
+          </div>
+        )}
         <Button 
           onClick={handleSignOut} 
           disabled={isLoading}
           variant="secondary"
-          className="px-4 py-2"
+          className={isMobile ? 'w-full' : 'px-4 py-2'}
         >
           {isLoading ? 'Signing out...' : 'Sign Out'}
         </Button>
@@ -69,7 +77,7 @@ export default function AuthButton() {
     <Button 
       onClick={handleGoogleSignIn} 
       disabled={isLoading}
-      className="bg-red-600 hover:bg-red-700 px-6 py-2 flex items-center gap-2"
+      className={`bg-red-600 hover:bg-red-700 ${isMobile ? 'w-full' : 'px-6 py-2'} flex items-center gap-2 justify-center`}
     >
       {isLoading ? (
         <>

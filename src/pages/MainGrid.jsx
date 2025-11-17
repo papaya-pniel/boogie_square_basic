@@ -425,47 +425,55 @@ export default function MainGrid() {
   }
 
       return (
-        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
-          <div className="flex justify-between items-center w-full max-w-4xl mb-8">
-            <div className="flex items-center gap-4">
-              <h1 className="text-4xl font-bold">Boogie Square</h1>
-              <div className="flex items-center gap-2">
+        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 safe-area-inset">
+          {/* Header - responsive layout */}
+          <div className={`flex ${isMobile ? 'flex-col gap-4' : 'justify-between items-center'} w-full max-w-4xl ${isMobile ? 'mb-4' : 'mb-8'}`}>
+            <div className={`flex ${isMobile ? 'flex-col gap-2' : 'items-center gap-4'} ${isMobile ? 'w-full' : ''}`}>
+              <h1 className={`${isMobile ? 'text-2xl' : 'text-4xl'} font-bold ${isMobile ? 'text-center' : ''}`}>Boogie Square</h1>
+              <div className={`flex items-center ${isMobile ? 'justify-center gap-4' : 'gap-2'}`}>
                 <button
                   onClick={() => loadGridByNumber(Math.max(1, currentGridNumber - 1))}
                   disabled={currentGridNumber <= 1}
-                  className="px-2 py-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-2xl' : 'px-2 py-1'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation`}
+                  aria-label="Previous grid"
                 >
                   ←
                 </button>
-                <div className="text-lg text-gray-400 font-semibold">
+                <div className={`${isMobile ? 'text-base' : 'text-lg'} text-gray-400 font-semibold text-center`}>
                   Grid #{currentGridNumber || 1}
                   {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
-                    <span className="ml-2 text-sm text-green-400">(Your Grid)</span>
+                    <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-green-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Your Grid)</span>
                   )}
                   {currentGridNumber === activeGridNumber && (
-                    <span className="ml-2 text-sm text-blue-400">(Active)</span>
+                    <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
                   )}
                 </div>
                 <button
                   onClick={() => loadGridByNumber(currentGridNumber + 1)}
                   disabled={currentGridNumber >= activeGridNumber}
-                  className="px-2 py-1 text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed"
+                  className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-2xl' : 'px-2 py-1'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation`}
+                  aria-label="Next grid"
                 >
                   →
                 </button>
               </div>
             </div>
-            <AuthButton />
+            <div className={isMobile ? 'w-full flex justify-center' : ''}>
+              <AuthButton />
+            </div>
           </div>
       
-      {/* Grid */}
+      {/* Grid - responsive sizing */}
       <div 
         className="grid gap-0 border border-gray-300"
         style={{
           gridTemplateColumns: `repeat(4, 1fr)`,
           gridTemplateRows: `repeat(4, 1fr)`,
-          width: "400px",
-          height: "400px"
+          width: isMobile ? "min(calc(100vw - 2rem), calc(100vh - 16rem))" : "400px",
+          height: isMobile ? "min(calc(100vw - 2rem), calc(100vh - 16rem))" : "400px",
+          maxWidth: isMobile ? "calc(100vw - 2rem)" : "400px",
+          maxHeight: isMobile ? "calc(100vh - 16rem)" : "400px",
+          aspectRatio: "1 / 1"
         }}
       >
         {paddedSlots.map((_, idx) => {
@@ -521,7 +529,7 @@ export default function MainGrid() {
                     />
                   )}
                   {/* Plus icon overlay */}
-                  <div className="text-6xl text-cyan-400 z-10 relative">+</div>
+                  <div className={`${isMobile ? 'text-5xl' : 'text-6xl'} text-cyan-400 z-10 relative`}>+</div>
                 </>
               )}
             </div>
@@ -538,10 +546,10 @@ export default function MainGrid() {
 
       {/* Completion Popup Modal */}
       {showCompletionPopup && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-          <div className="bg-white text-black rounded-lg p-8 max-w-md mx-4 shadow-2xl">
-            <h2 className="text-3xl font-bold mb-4 text-center">🎉 Recording Complete!</h2>
-            <p className="text-gray-700 mb-6 text-center">
+        <div className={`fixed inset-0 bg-black/80 ${isMobile ? 'flex items-end' : 'flex items-center justify-center'} z-50 safe-area-inset`}>
+            <div className={`bg-white text-black ${isMobile ? 'rounded-t-2xl rounded-b-none' : 'rounded-lg'} ${isMobile ? 'p-6' : 'p-8'} ${isMobile ? 'w-full max-w-full' : 'max-w-md'} ${isMobile ? '' : 'mx-4'} shadow-2xl`}>
+            <h2 className={`${isMobile ? 'text-2xl' : 'text-3xl'} font-bold mb-4 text-center`}>🎉 Recording Complete!</h2>
+            <p className={`text-gray-700 ${isMobile ? 'mb-4' : 'mb-6'} text-center ${isMobile ? 'text-sm' : ''}`}>
               Thank you for your contribution! Your video has been saved to the grid.
             </p>
             <div className="flex flex-col gap-4">
@@ -549,14 +557,14 @@ export default function MainGrid() {
                 href="https://docs.google.com/forms/d/1HqmP4Zw-wgC_CSIkvhqnuFKqXjSOfaxHNe12_34zrwg/edit?ts=6908e4ed"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg text-center transition-colors"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg text-center transition-colors touch-manipulation min-h-[44px] flex items-center justify-center"
               >
                 Give Us Feedback →
               </a>
               <Button
                 onClick={() => setShowCompletionPopup(false)}
                 variant="secondary"
-                className="w-full"
+                className={`w-full ${isMobile ? 'min-h-[44px]' : ''}`}
               >
                 Close
               </Button>
