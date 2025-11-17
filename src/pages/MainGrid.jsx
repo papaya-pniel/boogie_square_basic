@@ -60,6 +60,13 @@ export default function MainGrid() {
   // Track which takes have been started (using ref to avoid re-renders)
   const videosStartedRef = useRef({});
   
+  // Swipe gesture state
+  const touchStartRef = useRef(null);
+  const touchEndRef = useRef(null);
+  
+  // Minimum swipe distance (in pixels)
+  const minSwipeDistance = 50;
+  
   // Check if user just completed recording
   useEffect(() => {
     const justRecorded = searchParams.get('justRecorded');
@@ -354,6 +361,38 @@ export default function MainGrid() {
     setGridReady(true);
   }, [allTakeUrls]);
 
+  // Handle swipe gestures for grid navigation
+  const onTouchStart = (e) => {
+    if (!isMobile) return;
+    touchEndRef.current = null;
+    touchStartRef.current = e.targetTouches[0].clientX;
+  };
+
+  const onTouchMove = (e) => {
+    if (!isMobile) return;
+    touchEndRef.current = e.targetTouches[0].clientX;
+  };
+
+  const onTouchEnd = () => {
+    if (!isMobile || !touchStartRef.current || !touchEndRef.current) return;
+    
+    const distance = touchStartRef.current - touchEndRef.current;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe && currentGridNumber < activeGridNumber) {
+      // Swipe left - go to next grid
+      loadGridByNumber(currentGridNumber + 1);
+    } else if (isRightSwipe && currentGridNumber > 1) {
+      // Swipe right - go to previous grid
+      loadGridByNumber(Math.max(1, currentGridNumber - 1));
+    }
+    
+    // Reset touch positions
+    touchStartRef.current = null;
+    touchEndRef.current = null;
+  };
+
   const handleSlotClick = async (index) => {
     // If viewing a grid that's not the active grid, don't allow contributions
     if (currentGridNumber !== activeGridNumber) {
@@ -425,44 +464,22 @@ export default function MainGrid() {
   }
 
       return (
-        <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4 safe-area-inset">
-          {/* Header - responsive layout */}
-          <div className={`flex ${isMobile ? 'flex-col gap-4' : 'justify-between items-center'} w-full max-w-4xl ${isMobile ? 'mb-4' : 'mb-8'}`}>
-            <div className={`flex ${isMobile ? 'flex-col gap-2' : 'items-center gap-4'} ${isMobile ? 'w-full' : ''}`}>
-              <h1 className={`${isMobile ? 'text-2xl' : 'text-4xl'} font-bold ${isMobile ? 'text-center' : ''}`}>Boogie Square</h1>
-              <div className={`flex items-center ${isMobile ? 'justify-center gap-4' : 'gap-2'}`}>
-                <button
-                  onClick={() => loadGridByNumber(Math.max(1, currentGridNumber - 1))}
-                  disabled={currentGridNumber <= 1}
-                  className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-2xl' : 'px-2 py-1'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation`}
-                  aria-label="Previous grid"
-                >
-                  ←
-                </button>
-                <div className={`${isMobile ? 'text-base' : 'text-lg'} text-gray-400 font-semibold text-center`}>
-                  Grid #{currentGridNumber || 1}
-                  {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
-                    <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-green-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Your Grid)</span>
-                  )}
-                  {currentGridNumber === activeGridNumber && (
-                    <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => loadGridByNumber(currentGridNumber + 1)}
-                  disabled={currentGridNumber >= activeGridNumber}
-                  className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-2xl' : 'px-2 py-1'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation`}
-                  aria-label="Next grid"
-                >
-                  →
-                </button>
-              </div>
-            </div>
-            <div className={isMobile ? 'w-full flex justify-center' : ''}>
+        <div className="min-h-screen bg-black text-white flex flex-col safe-area-inset">
+          {/* Top Banner */}
+          <div className={`w-full ${isMobile ? 'px-4 py-3' : 'px-6 py-4'} flex justify-between items-center border-b border-gray-800`}>
+            <h1 className={`${isMobile ? 'text-xl' : 'text-2xl'} font-bold`}>Boogie Square</h1>
+            <div className="flex items-center">
               <AuthButton />
             </div>
           </div>
-      
+
+          {/* Main Content Area */}
+          <div 
+            className="flex-1 flex flex-col items-center justify-center p-4"
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+          >
       {/* Grid - responsive sizing */}
       <div 
         className="grid gap-0 border border-gray-300"
@@ -537,7 +554,37 @@ export default function MainGrid() {
         })}
       </div>
 
+      {/* Grid Number - below grid */}
+      <div className={`${isMobile ? 'text-base mt-4' : 'text-lg mt-6'} text-gray-400 font-semibold text-center`}>
+        Grid #{currentGridNumber || 1}
+        {userContributedGridNumber && userContributedGridNumber === currentGridNumber && (
+          <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-green-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Your Grid)</span>
+        )}
+        {currentGridNumber === activeGridNumber && (
+          <span className={`ml-2 ${isMobile ? 'text-xs' : 'text-sm'} text-blue-400 block ${isMobile ? 'mt-1' : 'inline'}`}>(Active)</span>
+        )}
+      </div>
 
+      {/* Grid Navigation Arrows - below grid */}
+      <div className={`flex items-center ${isMobile ? 'justify-center gap-6 mt-4' : 'justify-center gap-4 mt-6'}`}>
+        <button
+          onClick={() => loadGridByNumber(Math.max(1, currentGridNumber - 1))}
+          disabled={currentGridNumber <= 1}
+          className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-3xl' : 'min-w-[40px] min-h-[40px] text-2xl'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-colors`}
+          aria-label="Previous grid"
+        >
+          ←
+        </button>
+        <button
+          onClick={() => loadGridByNumber(currentGridNumber + 1)}
+          disabled={currentGridNumber >= activeGridNumber}
+          className={`${isMobile ? 'min-w-[44px] min-h-[44px] text-3xl' : 'min-w-[40px] min-h-[40px] text-2xl'} text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed touch-manipulation transition-colors`}
+          aria-label="Next grid"
+        >
+          →
+        </button>
+      </div>
+          </div>
 
       {/* Audio Player */}
       <audio ref={audioRef} autoPlay loop className="hidden">
