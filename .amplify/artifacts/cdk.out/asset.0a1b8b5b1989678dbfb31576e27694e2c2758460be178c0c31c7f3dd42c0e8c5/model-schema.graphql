@@ -1,6 +1,0 @@
-type UserProfile @model @auth(rules: [{allow: owner, ownerField: "owner"}])
-{
-  id: ID! @primaryKey
-  name: String
-  email: String
-}
