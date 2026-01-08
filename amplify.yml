@@ -3,15 +3,15 @@ frontend:
   phases:
     preBuild:
       commands:
+        - nvm use 20 || node -v  # fallback just prints version if nvm not present
         - npm ci
     build:
       commands:
         - npm run build
   artifacts:
-    baseDirectory: dist
+    baseDirectory: dist  # keep as is
     files:
       - '**/*'
   cache:
     paths:
       - node_modules/**  
-
