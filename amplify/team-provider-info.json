@@ -1,0 +1,15 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-boogiesquare1-dev-52016-authRole",
+      "UnauthRoleArn": "arn:aws:iam::622778847179:role/amplify-boogiesquare1-dev-52016-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::622778847179:role/amplify-boogiesquare1-dev-52016-authRole",
+      "Region": "eu-west-2",
+      "DeploymentBucketName": "amplify-boogiesquare1-dev-52016-deployment",
+      "UnauthRoleName": "amplify-boogiesquare1-dev-52016-unauthRole",
+      "StackName": "amplify-boogiesquare1-dev-52016",
+      "StackId": "arn:aws:cloudformation:eu-west-2:622778847179:stack/amplify-boogiesquare1-dev-52016/0ee7a110-ebe3-11f0-a508-02902340fcb5",
+      "AmplifyAppId": "d3d05m1pp3vxca"
+    }
+  }
+}
