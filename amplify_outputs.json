@@ -1,4 +1,189 @@
 {
-  "aws_project_region": "eu-west-2"
+  "auth": {
+    "user_pool_id": "eu-west-2_XYqMZ76PK",
+    "aws_region": "eu-west-2",
+    "user_pool_client_id": "7thrtnv13vrfs4656hk2n7fhpk",
+    "identity_pool_id": "eu-west-2:b30e127c-375f-46ce-8e2f-982ae86bed1a",
+    "mfa_methods": [],
+    "standard_required_attributes": [
+      "email"
+    ],
+    "username_attributes": [
+      "email"
+    ],
+    "user_verification_types": [
+      "email"
+    ],
+    "groups": [],
+    "mfa_configuration": "NONE",
+    "password_policy": {
+      "min_length": 8,
+      "require_lowercase": true,
+      "require_numbers": true,
+      "require_symbols": true,
+      "require_uppercase": true
+    },
+    "oauth": {
+      "identity_providers": [
+        "GOOGLE"
+      ],
+      "redirect_sign_in_uri": [
+        "http://localhost:5173",
+        "https://main.dvzr179hkw8yb.amplifyapp.com"
+      ],
+      "redirect_sign_out_uri": [
+        "http://localhost:5173",
+        "https://main.dvzr179hkw8yb.amplifyapp.com"
+      ],
+      "response_type": "code",
+      "scopes": [
+        "phone",
+        "email",
+        "openid",
+        "profile",
+        "aws.cognito.signin.user.admin"
+      ],
+      "domain": "50405069764ec31d90a3.auth.eu-west-2.amazoncognito.com"
+    },
+    "unauthenticated_identities_enabled": true
+  },
+  "data": {
+    "url": "https://33j6m7wcrbcknhhdhjcwfw3rje.appsync-api.eu-west-2.amazonaws.com/graphql",
+    "aws_region": "eu-west-2",
+    "default_authorization_type": "AMAZON_COGNITO_USER_POOLS",
+    "authorization_types": [
+      "AWS_IAM"
+    ],
+    "model_introspection": {
+      "version": 1,
+      "models": {
+        "UserProfile": {
+          "name": "UserProfile",
+          "fields": {
+            "id": {
+              "name": "id",
+              "isArray": false,
+              "type": "ID",
+              "isRequired": true,
+              "attributes": []
+            },
+            "name": {
+              "name": "name",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "email": {
+              "name": "email",
+              "isArray": false,
+              "type": "String",
+              "isRequired": false,
+              "attributes": []
+            },
+            "createdAt": {
+              "name": "createdAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            },
+            "updatedAt": {
+              "name": "updatedAt",
+              "isArray": false,
+              "type": "AWSDateTime",
+              "isRequired": false,
+              "attributes": [],
+              "isReadOnly": true
+            }
+          },
+          "syncable": true,
+          "pluralName": "UserProfiles",
+          "attributes": [
+            {
+              "type": "model",
+              "properties": {}
+            },
+            {
+              "type": "key",
+              "properties": {
+                "fields": [
+                  "id"
+                ]
+              }
+            },
+            {
+              "type": "auth",
+              "properties": {
+                "rules": [
+                  {
+                    "provider": "userPools",
+                    "ownerField": "owner",
+                    "allow": "owner",
+                    "identityClaim": "cognito:username",
+                    "operations": [
+                      "create",
+                      "update",
+                      "delete",
+                      "read"
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "primaryKeyInfo": {
+            "isCustomPrimaryKey": false,
+            "primaryKeyFieldName": "id",
+            "sortKeyFieldNames": []
+          }
+        }
+      },
+      "enums": {},
+      "nonModels": {}
+    }
+  },
+  "storage": {
+    "aws_region": "eu-west-2",
+    "bucket_name": "amplify-dancevideogrid-mi-boogiesquarestoragebucke-iujw1a7qdh19",
+    "buckets": [
+      {
+        "name": "boogie-square-storage",
+        "bucket_name": "amplify-dancevideogrid-mi-boogiesquarestoragebucke-iujw1a7qdh19",
+        "aws_region": "eu-west-2",
+        "paths": {
+          "public/*": {
+            "guest": [
+              "get",
+              "list"
+            ],
+            "authenticated": [
+              "get",
+              "list",
+              "write",
+              "delete"
+            ]
+          },
+          "protected/*": {
+            "authenticated": [
+              "get",
+              "list",
+              "write",
+              "delete"
+            ]
+          },
+          "private/*": {
+            "authenticated": [
+              "get",
+              "list",
+              "write",
+              "delete"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "version": "1.4"
 }
-
