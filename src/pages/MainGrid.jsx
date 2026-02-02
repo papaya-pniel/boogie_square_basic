@@ -3,17 +3,6 @@ import React, { useContext, useState, useRef, useEffect, useCallback } from "rea
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { VideoContext } from "../context/VideoContext";
 import { Button } from "../components/ui/button";
-import AuthButton from "../components/AuthButton";
-import { uploadData, downloadData, remove } from "aws-amplify/storage";
-
-const Storage = {
-  async put(filename, blob, options) {
-    return await uploadData(filename, blob, options);
-  },
-  async get(s3Key, options) {
-    return await downloadData(s3Key, options);
-  }
-};
 
 export default function MainGrid() {
   const navigate = useNavigate();
@@ -601,7 +590,6 @@ export default function MainGrid() {
                   </button>
                 </>
               )}
-              <AuthButton />
             </div>
           </div>
           

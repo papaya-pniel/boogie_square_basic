@@ -1,6 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
-import { uploadData, getUrl, downloadData } from "aws-amplify/storage";
-import { getCurrentUser, signInWithRedirect, signOut } from "@aws-amplify/auth";
+import { uploadData, getUrl } from "aws-amplify/storage";
+import { getCurrentUser } from "@aws-amplify/auth";
 
 export const VideoContext = createContext();
 
@@ -54,34 +54,6 @@ export function VideoProvider({ children }) {
       console.log('No authenticated user, using anonymous mode for upload');
       // Return the current user (which might be anonymous)
       return user;
-    }
-  };
-
-  // Google Auth functions
-  const signInWithGoogle = async () => {
-    try {
-      await signInWithRedirect({ provider: 'Google' });
-    } catch (error) {
-      console.error('Google sign in failed:', error);
-      throw error;
-    }
-  };
-
-  const signOutUser = async () => {
-    try {
-      await signOut();
-      // Create new anonymous user
-      const anonymousUser = {
-        userId: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        username: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        email: `anonymous-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-      };
-      setUser(anonymousUser);
-      // Reload page to reset state
-      window.location.reload();
-    } catch (error) {
-      console.error('Sign out failed:', error);
-      throw error;
     }
   };
 
@@ -1006,8 +978,6 @@ export function VideoProvider({ children }) {
       clearSharedGrid,
       forceSyncFromShared,
       syncUserAcrossContexts,
-      signInWithGoogle,
-      signOutUser,
       isGridFull,
       ensureActiveGrid,
       getUserContributedGridNumber,
